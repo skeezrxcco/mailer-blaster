@@ -7,6 +7,7 @@ export type WorkspaceIconKey =
   | "fileText"
   | "users"
   | "rocket"
+  | "sparkles"
   | "circleCheck"
   | "partyPopper"
   | "handCoins"
@@ -23,6 +24,7 @@ export const sidebarItems: WorkspaceNavSeed<SidebarTab>[] = [
   { id: "templates", label: "Templates", icon: "fileText" },
   { id: "contacts", label: "Contacts", icon: "users" },
   { id: "activity", label: "Activity", icon: "rocket" },
+  { id: "campaigns", label: "Campaigns", icon: "sparkles" },
 ]
 
 export const settingsSidebarItems: WorkspaceNavSeed<SettingsSection | "pricing" | "checkout">[] = [
@@ -39,6 +41,7 @@ export const pageTitleMap: Record<SidebarTab, string> = {
   templates: "Templates",
   contacts: "Contacts",
   activity: "Activity",
+  campaigns: "Campaigns",
   settings: "Settings",
   pricing: "Pricing",
   checkout: "Checkout",
@@ -55,6 +58,7 @@ export const workspaceStaticData = {
   user: {
     name: "Ricardo Pires",
     email: "ricardo@example.com",
+    plan: "pro",
     initials: "RP",
     avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=128&q=80",
   },

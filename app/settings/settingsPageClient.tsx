@@ -143,8 +143,8 @@ export function SettingsPageClient() {
   }
 
   return (
-    <WorkspaceShell tab="settings">
-      <div className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
+    <WorkspaceShell tab="settings" pageTitle="Settings">
+      <div data-workspace-scroll className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
         <div className="relative mb-5 overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top_left,#1d4ed8_0%,#111827_42%,#020617_100%)] px-5 py-5 sm:px-6">
           <p className="text-xs uppercase tracking-[0.16em] text-sky-200/85">Account control center</p>
           <p className="mt-1 text-sm text-zinc-200/90">Manage profile, plan, usage, referrals, pricing, and checkout from the sidebar.</p>

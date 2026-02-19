@@ -26,8 +26,8 @@ export function PricingPageClient() {
   }
 
   return (
-    <WorkspaceShell tab="pricing">
-      <div className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
+    <WorkspaceShell tab="pricing" pageTitle="Pricing">
+      <div data-workspace-scroll className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
         <div className="relative mb-6 overflow-hidden rounded-[30px] bg-[radial-gradient(circle_at_top,#0f766e_0%,#111827_45%,#020617_100%)] px-5 py-7 text-center sm:px-8">
           <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/85">Simple, transparent pricing</p>
           <h2 className="mt-2 text-2xl font-semibold text-zinc-100 sm:text-3xl">Choose a plan that fits your growth</h2>

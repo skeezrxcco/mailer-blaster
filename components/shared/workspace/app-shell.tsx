@@ -26,6 +26,7 @@ import { PanelLeftCloseIcon } from "@/components/ui/panel-left-close"
 import { PanelLeftOpenIcon } from "@/components/ui/panel-left-open"
 import { PartyPopperIcon } from "@/components/ui/party-popper"
 import { RocketIcon } from "@/components/ui/rocket"
+import { SparklesIcon } from "@/components/ui/sparkles"
 import { UsersIcon } from "@/components/ui/users"
 import { XIcon } from "@/components/ui/x"
 import {
@@ -58,6 +59,7 @@ const iconByKey: Record<WorkspaceIconKey, AppIcon> = {
   fileText: FileTextIcon,
   users: UsersIcon,
   rocket: RocketIcon,
+  sparkles: SparklesIcon,
   circleCheck: CircleCheckIcon,
   partyPopper: PartyPopperIcon,
   handCoins: HandCoinsIcon,
@@ -236,24 +238,55 @@ function DrawerNavigationButton({ item }: { item: NavigationItem }) {
   )
 }
 
-export function WorkspaceShell({ tab, children }: { tab: SidebarTab; children: ReactNode }) {
+export function WorkspaceShell({
+  tab,
+  children,
+  pageTitle,
+}: {
+  tab: SidebarTab
+  children: ReactNode
+  pageTitle?: string
+}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { hasCheckoutItem } = useCheckoutItem()
+  const contentRegionRef = useRef<HTMLDivElement | null>(null)
 
   const [sidebarExpanded, setSidebarExpanded] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarToggleHovered, setSidebarToggleHovered] = useState(false)
   const [topSettingsHovered, setTopSettingsHovered] = useState(false)
   const [topExitHovered, setTopExitHovered] = useState(false)
+  const [showTopTitle, setShowTopTitle] = useState(false)
 
   const credits = workspaceStaticData.credits
   const maxCredits = workspaceStaticData.maxCredits
+  const isProUser = workspaceStaticData.user.plan === "pro"
 
   const isSettingsSuiteRoute = tab === "settings" || tab === "pricing" || tab === "checkout"
   const activeSettingsSection = settingsSectionFromParam(searchParams.get("section"))
+  const activePageTitle = pageTitle ?? pageTitleMap[tab]
 
-  const pageTitle = pageTitleMap[tab]
+  useEffect(() => {
+    const contentRegion = contentRegionRef.current
+    if (!contentRegion) return
+
+    const scrollElement = contentRegion.querySelector<HTMLElement>("[data-workspace-scroll]")
+    if (!scrollElement) {
+      setShowTopTitle(false)
+      return
+    }
+
+    const onScroll = () => {
+      setShowTopTitle(scrollElement.scrollTop > 36)
+    }
+
+    onScroll()
+    scrollElement.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      scrollElement.removeEventListener("scroll", onScroll)
+    }
+  }, [tab, pageTitle])
 
   const navigateToTab = (nextTab: SidebarTab) => {
     router.push(tabRoutes[nextTab])
@@ -291,13 +324,16 @@ export function WorkspaceShell({ tab, children }: { tab: SidebarTab; children: R
             navigateToSettingsSection(item.id)
           },
         }))
-    : sidebarItems.map((item) => ({
-        id: item.id,
-        label: item.label,
-        icon: iconByKey[item.icon],
-        active: tab === item.id,
-        onSelect: () => navigateToTab(item.id),
-      }))
+    : sidebarItems
+        .filter((item) => item.id !== "campaigns" || isProUser)
+        .map((item) => ({
+          id: item.id,
+          label: item.label,
+          icon: iconByKey[item.icon],
+          indicator: item.id === "campaigns" ? "PRO" : undefined,
+          active: tab === item.id,
+          onSelect: () => navigateToTab(item.id),
+        }))
 
   const drawerDescription = isSettingsSuiteRoute ? workspaceStaticData.settingsDrawerDescription : workspaceStaticData.workspaceDrawerDescription
 
@@ -374,7 +410,21 @@ export function WorkspaceShell({ tab, children }: { tab: SidebarTab; children: R
                     </div>
                   </DrawerContent>
                 </Drawer>
-                <h1 className="truncate text-lg font-semibold text-zinc-100">{pageTitle}</h1>
+                <div
+                  className={cn(
+                    "overflow-hidden transition-all duration-300",
+                    showTopTitle ? "max-w-[360px] opacity-100" : "max-w-0 opacity-0",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "translate-y-0 rounded-full bg-zinc-950/70 px-3 py-1 text-sm font-medium text-zinc-200 transition duration-300",
+                      showTopTitle ? "translate-y-0" : "-translate-y-1",
+                    )}
+                  >
+                    <span className="block truncate">{activePageTitle}</span>
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {isSettingsSuiteRoute ? (
@@ -404,7 +454,9 @@ export function WorkspaceShell({ tab, children }: { tab: SidebarTab; children: R
                 )}
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+            <div ref={contentRegionRef} className="min-h-0 flex-1 overflow-hidden">
+              {children}
+            </div>
           </section>
         </div>
       </div>

@@ -6,7 +6,7 @@ export type CampaignRecord = {
   sentAt: string
   openRate: string
   clickRate: string
-  status: "sent" | "scheduled" | "draft"
+  status: "sent" | "scheduled" | "draft" | "queued" | "processing"
 }
 
 export const campaignHistory: CampaignRecord[] = [

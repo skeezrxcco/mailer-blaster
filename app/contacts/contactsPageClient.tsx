@@ -81,8 +81,8 @@ export function ContactsPageClient() {
   )
 
   return (
-    <WorkspaceShell tab="contacts">
-      <div className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
+    <WorkspaceShell tab="contacts" pageTitle={contactsPageCopy.title}>
+      <div data-workspace-scroll className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
         <div className="mb-4">
           <h2 className="text-xl font-semibold text-zinc-100">{contactsPageCopy.title}</h2>
           <p className="text-sm text-zinc-400">{contactsPageCopy.subtitle}</p>

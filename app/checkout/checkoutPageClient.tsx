@@ -15,7 +15,7 @@ export function CheckoutPageClient() {
 
   if (!checkoutItem) {
     return (
-      <WorkspaceShell tab="checkout">
+      <WorkspaceShell tab="checkout" pageTitle="Checkout">
         <div className="flex min-h-0 h-full items-center justify-center p-4 md:p-6">
           <Card className="w-full max-w-xl rounded-3xl border-0 bg-zinc-950/72">
             <CardHeader>
@@ -33,8 +33,8 @@ export function CheckoutPageClient() {
     checkoutItem.billing === "monthly" ? "per month" : checkoutItem.billing === "annual" ? "per year" : "one-time payment"
 
   return (
-    <WorkspaceShell tab="checkout">
-      <div className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
+    <WorkspaceShell tab="checkout" pageTitle="Checkout">
+      <div data-workspace-scroll className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
         <div className="mb-5">
           <p className="text-sm text-zinc-400">Stripe-inspired payment experience with instant activation after payment.</p>
         </div>
