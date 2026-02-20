@@ -1,5 +1,11 @@
+import { Suspense } from "react"
+
 import { ActivityPageClient } from "./activityPageClient"
 
 export default function ActivityPage() {
-  return <ActivityPageClient />
+  return (
+    <Suspense fallback={null}>
+      <ActivityPageClient />
+    </Suspense>
+  )
 }
