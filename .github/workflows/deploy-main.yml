@@ -93,9 +93,31 @@ jobs:
       REDIS_URL: ${{ secrets.REDIS_URL }}
       NATS_URL: ${{ secrets.NATS_URL }}
       AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+      AI_PROVIDER_PRIORITY: ${{ secrets.AI_PROVIDER_PRIORITY }}
+      AI_PROVIDER_STRICT: ${{ secrets.AI_PROVIDER_STRICT }}
+      AI_FREE_ONBOARDING_ENABLED: ${{ secrets.AI_FREE_ONBOARDING_ENABLED }}
+      AI_FREE_ONBOARDING_PLANS: ${{ secrets.AI_FREE_ONBOARDING_PLANS }}
+      AI_FREE_DAILY_OPENAI: ${{ secrets.AI_FREE_DAILY_OPENAI }}
+      AI_FREE_DAILY_ANTHROPIC: ${{ secrets.AI_FREE_DAILY_ANTHROPIC }}
+      AI_FREE_DAILY_DEEPSEEK: ${{ secrets.AI_FREE_DAILY_DEEPSEEK }}
+      AI_FREE_DAILY_GROK: ${{ secrets.AI_FREE_DAILY_GROK }}
+      AI_FREE_DAILY_LLAMA: ${{ secrets.AI_FREE_DAILY_LLAMA }}
       OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+      ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
+      ANTHROPIC_MAX_TOKENS: ${{ secrets.ANTHROPIC_MAX_TOKENS }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
+      GROK_BASE_URL: ${{ secrets.GROK_BASE_URL }}
+      GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+      GROK_MODEL: ${{ secrets.GROK_MODEL }}
+      LLAMA_BASE_URL: ${{ secrets.LLAMA_BASE_URL }}
+      LLAMA_API_KEY: ${{ secrets.LLAMA_API_KEY }}
+      LLAMA_MODEL: ${{ secrets.LLAMA_MODEL }}
       AUTH_CODE_TTL_MINUTES: ${{ secrets.AUTH_CODE_TTL_MINUTES }}
       AUTH_CODE_RESEND_COOLDOWN_SECONDS: ${{ secrets.AUTH_CODE_RESEND_COOLDOWN_SECONDS }}
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
@@ -108,12 +130,16 @@ jobs:
         run: |
           set -e
           missing=0
-          for key in VPS_HOST VPS_USER VPS_SSH_KEY DOCKERHUB_USERNAME DOCKERHUB_TOKEN POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB AUTH_SECRET NEXTAUTH_SECRET AUTH_URL NEXTAUTH_URL AUTH_TRUST_HOST AUTH_EMAIL_FROM AUTH_GOOGLE_ID AUTH_GOOGLE_SECRET AUTH_GITHUB_ID AUTH_GITHUB_SECRET EMAIL_FROM SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS REDIS_URL NATS_URL AI_PROVIDER OPENAI_BASE_URL OPENAI_MODEL AUTH_CODE_TTL_MINUTES AUTH_CODE_RESEND_COOLDOWN_SECONDS; do
+          for key in VPS_HOST VPS_USER VPS_SSH_KEY DOCKERHUB_USERNAME DOCKERHUB_TOKEN POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB AUTH_SECRET NEXTAUTH_SECRET AUTH_URL NEXTAUTH_URL AUTH_TRUST_HOST AUTH_EMAIL_FROM AUTH_GOOGLE_ID AUTH_GOOGLE_SECRET AUTH_GITHUB_ID AUTH_GITHUB_SECRET EMAIL_FROM SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS REDIS_URL NATS_URL AI_PROVIDER AUTH_CODE_TTL_MINUTES AUTH_CODE_RESEND_COOLDOWN_SECONDS; do
             if [ -z "${!key}" ]; then
               echo "::error::Missing required secret: $key"
               missing=1
             fi
           done
+          if [ -z "${OPENAI_API_KEY}" ] && [ -z "${ANTHROPIC_API_KEY}" ] && [ -z "${DEEPSEEK_API_KEY}" ] && [ -z "${GROK_API_KEY}" ] && [ -z "${LLAMA_API_KEY}" ]; then
+            echo "::error::At least one AI provider key is required (OPENAI_API_KEY, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, GROK_API_KEY, LLAMA_API_KEY)."
+            missing=1
+          fi
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
@@ -155,9 +181,31 @@ jobs:
             printf 'REDIS_URL=%s\n' "$REDIS_URL"
             printf 'NATS_URL=%s\n' "$NATS_URL"
             printf 'AI_PROVIDER=%s\n' "$AI_PROVIDER"
-            printf 'OPENAI_BASE_URL=%s\n' "$OPENAI_BASE_URL"
+            printf 'AI_PROVIDER_PRIORITY=%s\n' "${AI_PROVIDER_PRIORITY:-deepseek,llama,openai,anthropic,grok}"
+            printf 'AI_PROVIDER_STRICT=%s\n' "${AI_PROVIDER_STRICT:-false}"
+            printf 'AI_FREE_ONBOARDING_ENABLED=%s\n' "${AI_FREE_ONBOARDING_ENABLED:-true}"
+            printf 'AI_FREE_ONBOARDING_PLANS=%s\n' "${AI_FREE_ONBOARDING_PLANS:-starter,free,trial}"
+            printf 'AI_FREE_DAILY_OPENAI=%s\n' "${AI_FREE_DAILY_OPENAI:-0}"
+            printf 'AI_FREE_DAILY_ANTHROPIC=%s\n' "${AI_FREE_DAILY_ANTHROPIC:-0}"
+            printf 'AI_FREE_DAILY_DEEPSEEK=%s\n' "${AI_FREE_DAILY_DEEPSEEK:-0}"
+            printf 'AI_FREE_DAILY_GROK=%s\n' "${AI_FREE_DAILY_GROK:-0}"
+            printf 'AI_FREE_DAILY_LLAMA=%s\n' "${AI_FREE_DAILY_LLAMA:-0}"
+            printf 'OPENAI_BASE_URL=%s\n' "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
-            printf 'OPENAI_MODEL=%s\n' "$OPENAI_MODEL"
+            printf 'OPENAI_MODEL=%s\n' "${OPENAI_MODEL:-gpt-4.1-mini}"
+            printf 'ANTHROPIC_BASE_URL=%s\n' "${ANTHROPIC_BASE_URL:-https://api.anthropic.com/v1}"
+            printf 'ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY"
+            printf 'ANTHROPIC_MODEL=%s\n' "${ANTHROPIC_MODEL:-claude-3-5-haiku-latest}"
+            printf 'ANTHROPIC_MAX_TOKENS=%s\n' "${ANTHROPIC_MAX_TOKENS:-1024}"
+            printf 'DEEPSEEK_BASE_URL=%s\n' "${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}"
+            printf 'DEEPSEEK_API_KEY=%s\n' "$DEEPSEEK_API_KEY"
+            printf 'DEEPSEEK_MODEL=%s\n' "${DEEPSEEK_MODEL:-deepseek-chat}"
+            printf 'GROK_BASE_URL=%s\n' "${GROK_BASE_URL:-https://api.x.ai/v1}"
+            printf 'GROK_API_KEY=%s\n' "$GROK_API_KEY"
+            printf 'GROK_MODEL=%s\n' "${GROK_MODEL:-grok-beta}"
+            printf 'LLAMA_BASE_URL=%s\n' "${LLAMA_BASE_URL:-https://api.llama.com/compat/v1}"
+            printf 'LLAMA_API_KEY=%s\n' "$LLAMA_API_KEY"
+            printf 'LLAMA_MODEL=%s\n' "${LLAMA_MODEL:-Llama-3.3-70B-Instruct}"
             printf 'AUTH_CODE_TTL_MINUTES=%s\n' "$AUTH_CODE_TTL_MINUTES"
             printf 'AUTH_CODE_RESEND_COOLDOWN_SECONDS=%s\n' "$AUTH_CODE_RESEND_COOLDOWN_SECONDS"
             printf 'STRIPE_SECRET_KEY=%s\n' "$STRIPE_SECRET_KEY"

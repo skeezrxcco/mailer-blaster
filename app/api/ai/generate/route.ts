@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     prompt?: string
     system?: string
     model?: string
+    provider?: string
     async?: boolean
   }
 
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
         prompt,
         system: body.system,
         model: body.model,
+        provider: body.provider,
+        userPlan: session.user.plan,
       },
     })
 
@@ -42,6 +45,9 @@ export async function POST(request: Request) {
     prompt,
     system: body.system,
     model: body.model,
+    provider: body.provider,
+    userId: session.user.id,
+    userPlan: session.user.plan,
   })
 
   await createMessage({
@@ -56,7 +62,7 @@ export async function POST(request: Request) {
     role: "ASSISTANT",
     content: result.text,
     channel: "ai",
-    metadata: { model: result.model },
+    metadata: { model: result.model, provider: result.provider },
   })
 
   return NextResponse.json({

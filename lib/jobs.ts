@@ -82,12 +82,14 @@ async function processAiGenerateJob(job: Job) {
   const prompt = String(payload.prompt ?? "")
   const system = payload.system ? String(payload.system) : undefined
   const model = payload.model ? String(payload.model) : undefined
+  const provider = payload.provider ? String(payload.provider) : undefined
+  const userPlan = payload.userPlan ? String(payload.userPlan) : undefined
 
   if (!prompt.trim()) {
     throw new Error("ai_generate payload must include `prompt`")
   }
 
-  return generateAiText({ prompt, system, model })
+  return generateAiText({ prompt, system, model, provider, userId: job.userId ?? undefined, userPlan })
 }
 
 async function runJob(job: Job) {

@@ -168,6 +168,18 @@ model AuthCode {
   @@index([userId, purpose, codeHash])
 }
 
+model AiProviderDailyUsage {
+  id        String   @id @default(cuid())
+  day       String
+  provider  String
+  requests  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([day, provider])
+  @@index([provider, day])
+}
+
 enum CampaignStatus {
   DRAFT
   SCHEDULED
