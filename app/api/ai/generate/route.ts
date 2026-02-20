@@ -6,6 +6,29 @@ import { generateAiText } from "@/lib/ai"
 import { createJob } from "@/lib/jobs"
 import { createMessage } from "@/lib/messaging"
 
+function statusForAiError(message: string): number {
+  const normalized = message.toLowerCase()
+  if (
+    normalized.includes("daily free ai limit reached") ||
+    normalized.includes("daily free ai capacity is exhausted")
+  ) {
+    return 429
+  }
+  if (normalized.includes("no eligible ai provider available")) {
+    return 503
+  }
+  if (normalized.includes("no daily provider caps are configured")) {
+    return 503
+  }
+  if (normalized.includes("no ai provider api key configured")) {
+    return 503
+  }
+  if (normalized.includes("all ai providers failed")) {
+    return 502
+  }
+  return 500
+}
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -41,33 +64,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ job }, { status: 202 })
   }
 
-  const result = await generateAiText({
-    prompt,
-    system: body.system,
-    model: body.model,
-    provider: body.provider,
-    userId: session.user.id,
-    userPlan: session.user.plan,
-  })
+  try {
+    const result = await generateAiText({
+      prompt,
+      system: body.system,
+      model: body.model,
+      provider: body.provider,
+      userId: session.user.id,
+      userPlan: session.user.plan,
+    })
 
-  await createMessage({
-    userId: session.user.id,
-    role: "USER",
-    content: prompt,
-    channel: "ai",
-  })
+    await createMessage({
+      userId: session.user.id,
+      role: "USER",
+      content: prompt,
+      channel: "ai",
+    })
 
-  const assistantMessage = await createMessage({
-    userId: session.user.id,
-    role: "ASSISTANT",
-    content: result.text,
-    channel: "ai",
-    metadata: { model: result.model, provider: result.provider },
-  })
+    const assistantMessage = await createMessage({
+      userId: session.user.id,
+      role: "ASSISTANT",
+      content: result.text,
+      channel: "ai",
+      metadata: { model: result.model, provider: result.provider },
+    })
 
-  return NextResponse.json({
-    text: result.text,
-    model: result.model,
-    message: assistantMessage,
-  })
+    return NextResponse.json({
+      text: result.text,
+      model: result.model,
+      provider: result.provider,
+      message: assistantMessage,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "AI generation failed"
+    return NextResponse.json({ error: message }, { status: statusForAiError(message) })
+  }
 }

@@ -10,7 +10,7 @@ declare global {
 }
 
 const connectionString =
-  process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/ai_newsletter_agent?schema=public"
+  process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/blastermailer?schema=public"
 
 const pool = global.__prismaPool ?? new Pool({ connectionString })
 const adapter = new PrismaPg(pool)

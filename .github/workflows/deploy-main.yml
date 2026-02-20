@@ -97,11 +97,18 @@ jobs:
       AI_PROVIDER_STRICT: ${{ secrets.AI_PROVIDER_STRICT }}
       AI_FREE_ONBOARDING_ENABLED: ${{ secrets.AI_FREE_ONBOARDING_ENABLED }}
       AI_FREE_ONBOARDING_PLANS: ${{ secrets.AI_FREE_ONBOARDING_PLANS }}
+      AI_FREE_REQUIRE_CAPS: ${{ secrets.AI_FREE_REQUIRE_CAPS }}
+      AI_FREE_DAILY_PER_USER: ${{ secrets.AI_FREE_DAILY_PER_USER }}
       AI_FREE_DAILY_OPENAI: ${{ secrets.AI_FREE_DAILY_OPENAI }}
       AI_FREE_DAILY_ANTHROPIC: ${{ secrets.AI_FREE_DAILY_ANTHROPIC }}
       AI_FREE_DAILY_DEEPSEEK: ${{ secrets.AI_FREE_DAILY_DEEPSEEK }}
       AI_FREE_DAILY_GROK: ${{ secrets.AI_FREE_DAILY_GROK }}
       AI_FREE_DAILY_LLAMA: ${{ secrets.AI_FREE_DAILY_LLAMA }}
+      AI_FREE_WEIGHT_OPENAI: ${{ secrets.AI_FREE_WEIGHT_OPENAI }}
+      AI_FREE_WEIGHT_ANTHROPIC: ${{ secrets.AI_FREE_WEIGHT_ANTHROPIC }}
+      AI_FREE_WEIGHT_DEEPSEEK: ${{ secrets.AI_FREE_WEIGHT_DEEPSEEK }}
+      AI_FREE_WEIGHT_GROK: ${{ secrets.AI_FREE_WEIGHT_GROK }}
+      AI_FREE_WEIGHT_LLAMA: ${{ secrets.AI_FREE_WEIGHT_LLAMA }}
       OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
@@ -120,6 +127,7 @@ jobs:
       LLAMA_MODEL: ${{ secrets.LLAMA_MODEL }}
       AUTH_CODE_TTL_MINUTES: ${{ secrets.AUTH_CODE_TTL_MINUTES }}
       AUTH_CODE_RESEND_COOLDOWN_SECONDS: ${{ secrets.AUTH_CODE_RESEND_COOLDOWN_SECONDS }}
+      WAITLIST_MODE: ${{ secrets.WAITLIST_MODE }}
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
     steps:
@@ -185,11 +193,18 @@ jobs:
             printf 'AI_PROVIDER_STRICT=%s\n' "${AI_PROVIDER_STRICT:-false}"
             printf 'AI_FREE_ONBOARDING_ENABLED=%s\n' "${AI_FREE_ONBOARDING_ENABLED:-true}"
             printf 'AI_FREE_ONBOARDING_PLANS=%s\n' "${AI_FREE_ONBOARDING_PLANS:-starter,free,trial}"
+            printf 'AI_FREE_REQUIRE_CAPS=%s\n' "${AI_FREE_REQUIRE_CAPS:-true}"
+            printf 'AI_FREE_DAILY_PER_USER=%s\n' "${AI_FREE_DAILY_PER_USER:-20}"
             printf 'AI_FREE_DAILY_OPENAI=%s\n' "${AI_FREE_DAILY_OPENAI:-0}"
             printf 'AI_FREE_DAILY_ANTHROPIC=%s\n' "${AI_FREE_DAILY_ANTHROPIC:-0}"
             printf 'AI_FREE_DAILY_DEEPSEEK=%s\n' "${AI_FREE_DAILY_DEEPSEEK:-0}"
             printf 'AI_FREE_DAILY_GROK=%s\n' "${AI_FREE_DAILY_GROK:-0}"
             printf 'AI_FREE_DAILY_LLAMA=%s\n' "${AI_FREE_DAILY_LLAMA:-0}"
+            printf 'AI_FREE_WEIGHT_OPENAI=%s\n' "${AI_FREE_WEIGHT_OPENAI:-0.85}"
+            printf 'AI_FREE_WEIGHT_ANTHROPIC=%s\n' "${AI_FREE_WEIGHT_ANTHROPIC:-0.75}"
+            printf 'AI_FREE_WEIGHT_DEEPSEEK=%s\n' "${AI_FREE_WEIGHT_DEEPSEEK:-1.3}"
+            printf 'AI_FREE_WEIGHT_GROK=%s\n' "${AI_FREE_WEIGHT_GROK:-0.65}"
+            printf 'AI_FREE_WEIGHT_LLAMA=%s\n' "${AI_FREE_WEIGHT_LLAMA:-1.15}"
             printf 'OPENAI_BASE_URL=%s\n' "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
             printf 'OPENAI_MODEL=%s\n' "${OPENAI_MODEL:-gpt-4.1-mini}"
@@ -208,6 +223,7 @@ jobs:
             printf 'LLAMA_MODEL=%s\n' "${LLAMA_MODEL:-Llama-3.3-70B-Instruct}"
             printf 'AUTH_CODE_TTL_MINUTES=%s\n' "$AUTH_CODE_TTL_MINUTES"
             printf 'AUTH_CODE_RESEND_COOLDOWN_SECONDS=%s\n' "$AUTH_CODE_RESEND_COOLDOWN_SECONDS"
+            printf 'WAITLIST_MODE=%s\n' "${WAITLIST_MODE:-true}"
             printf 'STRIPE_SECRET_KEY=%s\n' "$STRIPE_SECRET_KEY"
             printf 'STRIPE_WEBHOOK_SECRET=%s\n' "$STRIPE_WEBHOOK_SECRET"
           } > .env.production
@@ -225,7 +241,9 @@ jobs:
             cd /opt/mailerblaster
             echo '$DOCKERHUB_TOKEN' | docker login -u '$DOCKERHUB_USERNAME' --password-stdin
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
-            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d db redis nats
+            docker compose -f docker-compose.prod.yml --env-file .env.production run --rm app npm run db:push
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans app
             docker compose -f docker-compose.prod.yml --env-file .env.production ps
           "
 

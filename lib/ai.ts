@@ -28,13 +28,43 @@ type ProviderConfig = {
 
 const DEFAULT_PRIORITY: AiProviderName[] = ["deepseek", "llama", "openai", "anthropic", "grok"]
 const ONBOARDING_FREE_PLANS = new Set(["starter", "free", "trial"])
+const DEFAULT_FREE_DAILY_PER_USER = 20
+const DEFAULT_FREE_WEIGHTS: Record<AiProviderName, number> = {
+  openai: 0.85,
+  anthropic: 0.75,
+  deepseek: 1.3,
+  grok: 0.65,
+  llama: 1.15,
+}
+
+function emptyUsageCounters(): Record<AiProviderName, number> {
+  return {
+    openai: 0,
+    anthropic: 0,
+    deepseek: 0,
+    grok: 0,
+    llama: 0,
+  }
+}
 
 function asProviderName(value?: string | null): AiProviderName | null {
   const normalized = String(value ?? "")
     .trim()
     .toLowerCase()
-  if (normalized === "openai" || normalized === "anthropic" || normalized === "deepseek" || normalized === "grok" || normalized === "llama") {
-    return normalized
+  if (normalized === "openai" || normalized === "gpt") {
+    return "openai"
+  }
+  if (normalized === "anthropic" || normalized === "claude") {
+    return "anthropic"
+  }
+  if (normalized === "deepseek") {
+    return "deepseek"
+  }
+  if (normalized === "grok" || normalized === "xai" || normalized === "x.ai") {
+    return "grok"
+  }
+  if (normalized === "llama" || normalized === "meta" || normalized === "meta-llama") {
+    return "llama"
   }
   return null
 }
@@ -63,6 +93,11 @@ function parsePositiveInt(value: string | undefined): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 }
 
+function parsePositiveFloat(value: string | undefined): number {
+  const parsed = Number.parseFloat(String(value ?? "").trim())
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
 function getDailyCaps(): Record<AiProviderName, number> {
   return {
     openai: parsePositiveInt(process.env.AI_FREE_DAILY_OPENAI),
@@ -71,6 +106,32 @@ function getDailyCaps(): Record<AiProviderName, number> {
     grok: parsePositiveInt(process.env.AI_FREE_DAILY_GROK),
     llama: parsePositiveInt(process.env.AI_FREE_DAILY_LLAMA),
   }
+}
+
+function hasAnyDailyCap(caps: Record<AiProviderName, number>): boolean {
+  return Object.values(caps).some((cap) => cap > 0)
+}
+
+function getFreeWeights(): Record<AiProviderName, number> {
+  return {
+    openai: parsePositiveFloat(process.env.AI_FREE_WEIGHT_OPENAI) || DEFAULT_FREE_WEIGHTS.openai,
+    anthropic: parsePositiveFloat(process.env.AI_FREE_WEIGHT_ANTHROPIC) || DEFAULT_FREE_WEIGHTS.anthropic,
+    deepseek: parsePositiveFloat(process.env.AI_FREE_WEIGHT_DEEPSEEK) || DEFAULT_FREE_WEIGHTS.deepseek,
+    grok: parsePositiveFloat(process.env.AI_FREE_WEIGHT_GROK) || DEFAULT_FREE_WEIGHTS.grok,
+    llama: parsePositiveFloat(process.env.AI_FREE_WEIGHT_LLAMA) || DEFAULT_FREE_WEIGHTS.llama,
+  }
+}
+
+function getPerUserDailyFreeLimit(): number {
+  const configured = parsePositiveInt(process.env.AI_FREE_DAILY_PER_USER)
+  return configured || DEFAULT_FREE_DAILY_PER_USER
+}
+
+function shouldRequireOnboardingCaps(): boolean {
+  const configured = (process.env.AI_FREE_REQUIRE_CAPS ?? "").trim().toLowerCase()
+  if (configured === "true" || configured === "1" || configured === "yes") return true
+  if (configured === "false" || configured === "0" || configured === "no") return false
+  return process.env.NODE_ENV === "production"
 }
 
 function utcDayKey(date = new Date()): string {
@@ -147,15 +208,9 @@ function buildProviderConfigs(): ProviderConfig[] {
 }
 
 async function getDailyUsage(day: string, providers: AiProviderName[]): Promise<Record<AiProviderName, number>> {
-  const empty: Record<AiProviderName, number> = {
-    openai: 0,
-    anthropic: 0,
-    deepseek: 0,
-    grok: 0,
-    llama: 0,
-  }
+  const usage = emptyUsageCounters()
 
-  if (providers.length === 0) return empty
+  if (providers.length === 0) return usage
 
   try {
     const rows = await prisma.aiProviderDailyUsage.findMany({
@@ -174,13 +229,13 @@ async function getDailyUsage(day: string, providers: AiProviderName[]): Promise<
     for (const row of rows) {
       const provider = asProviderName(row.provider)
       if (!provider) continue
-      empty[provider] = row.requests
+      usage[provider] = row.requests
     }
   } catch {
     // If tracking table is unavailable, keep zeroed counters.
   }
 
-  return empty
+  return usage
 }
 
 async function bumpDailyUsage(day: string, provider: AiProviderName) {
@@ -208,24 +263,65 @@ async function bumpDailyUsage(day: string, provider: AiProviderName) {
   }
 }
 
-async function selectOnboardingProvider(
-  available: ProviderConfig[],
+async function getUserDailyUsage(day: string, userId: string): Promise<number> {
+  try {
+    const row = await prisma.aiUserDailyUsage.findUnique({
+      where: {
+        day_userId: {
+          day,
+          userId,
+        },
+      },
+      select: {
+        requests: true,
+      },
+    })
+    return row?.requests ?? 0
+  } catch {
+    return 0
+  }
+}
+
+async function bumpUserDailyUsage(day: string, userId: string) {
+  try {
+    await prisma.aiUserDailyUsage.upsert({
+      where: {
+        day_userId: {
+          day,
+          userId,
+        },
+      },
+      create: {
+        day,
+        userId,
+        requests: 1,
+      },
+      update: {
+        requests: {
+          increment: 1,
+        },
+      },
+    })
+  } catch {
+    // Non-blocking metric update.
+  }
+}
+
+function selectOnboardingProvider(
+  availableProviders: AiProviderName[],
   caps: Record<AiProviderName, number>,
-  day: string,
-): Promise<AiProviderName | null> {
-  const cappedProviders = available.map((item) => item.provider).filter((provider) => caps[provider] > 0)
-  if (cappedProviders.length === 0) return null
-
-  const usage = await getDailyUsage(day, cappedProviders)
-
+  usage: Record<AiProviderName, number>,
+  weights: Record<AiProviderName, number>,
+): AiProviderName | null {
+  if (availableProviders.length === 0) return null
   let best: { provider: AiProviderName; score: number; remaining: number } | null = null
-  for (const provider of cappedProviders) {
+  for (const provider of availableProviders) {
     const cap = caps[provider]
     const used = usage[provider] ?? 0
-    const remaining = cap - used
-    if (remaining <= 0) continue
-
-    const score = used / cap
+    if (cap > 0 && used >= cap) continue
+    const remaining = cap > 0 ? cap - used : Number.MAX_SAFE_INTEGER
+    const utilization = cap > 0 ? used / cap : 0
+    const score = utilization / (weights[provider] || 1)
     if (
       !best ||
       score < best.score ||
@@ -242,6 +338,7 @@ function buildAttemptOrder(
   available: ProviderConfig[],
   input: GenerateAiTextInput,
   selectedOnboardingProvider: AiProviderName | null,
+  allowedProviders?: Set<AiProviderName>,
 ): AiProviderName[] {
   const availableNames = new Set(available.map((provider) => provider.provider))
   const ordered: AiProviderName[] = []
@@ -249,6 +346,7 @@ function buildAttemptOrder(
   const push = (provider: AiProviderName | null) => {
     if (!provider) return
     if (!availableNames.has(provider)) return
+    if (allowedProviders && !allowedProviders.has(provider)) return
     if (!ordered.includes(provider)) ordered.push(provider)
   }
 
@@ -261,7 +359,7 @@ function buildAttemptOrder(
 
   const strict = (process.env.AI_PROVIDER_STRICT ?? "").trim().toLowerCase()
   if (preferredProvider !== "auto" && (strict === "true" || strict === "1")) {
-    return ordered.length > 0 ? ordered : [preferredProvider]
+    return ordered
   }
 
   for (const provider of parsePriority()) {
@@ -384,8 +482,44 @@ export async function generateAiText(input: GenerateAiTextInput): Promise<Genera
   const caps = getDailyCaps()
   const day = utcDayKey()
   const onboardingPool = shouldUseOnboardingPool(input.userPlan)
-  const selectedOnboardingProvider = onboardingPool ? await selectOnboardingProvider(providers, caps, day) : null
-  const attempts = buildAttemptOrder(providers, input, selectedOnboardingProvider)
+  const hasCaps = hasAnyDailyCap(caps)
+  const usage = onboardingPool ? await getDailyUsage(day, providers.map((provider) => provider.provider)) : emptyUsageCounters()
+  const freeWeights = getFreeWeights()
+
+  if (onboardingPool && !hasCaps && shouldRequireOnboardingCaps()) {
+    throw new Error("Free onboarding AI is enabled, but no daily provider caps are configured.")
+  }
+
+  const onboardingCandidates = onboardingPool
+    ? providers
+        .map((provider) => provider.provider)
+        .filter((provider) => (!hasCaps ? true : caps[provider] > 0 && (usage[provider] ?? 0) < caps[provider]))
+    : providers.map((provider) => provider.provider)
+
+  if (onboardingPool && onboardingCandidates.length === 0) {
+    throw new Error("Daily free AI capacity is exhausted for onboarding users. Please try later or upgrade your plan.")
+  }
+
+  const perUserLimit = onboardingPool ? getPerUserDailyFreeLimit() : 0
+  if (onboardingPool && perUserLimit > 0 && input.userId) {
+    const userUsage = await getUserDailyUsage(day, input.userId)
+    if (userUsage >= perUserLimit) {
+      throw new Error(`Daily free AI limit reached (${perUserLimit} requests). Upgrade to continue instantly.`)
+    }
+  }
+
+  const selectedOnboardingProvider = onboardingPool
+    ? selectOnboardingProvider(onboardingCandidates, caps, usage, freeWeights)
+    : null
+  const attempts = buildAttemptOrder(
+    providers,
+    input,
+    selectedOnboardingProvider,
+    onboardingPool ? new Set(onboardingCandidates) : undefined,
+  )
+  if (attempts.length === 0) {
+    throw new Error("No eligible AI provider available for this request.")
+  }
   const errors: string[] = []
 
   for (const providerName of attempts) {
@@ -400,8 +534,13 @@ export async function generateAiText(input: GenerateAiTextInput): Promise<Genera
         result = await generateWithOpenAiCompatible(config, input)
       }
 
-      if (onboardingPool && caps[config.provider] > 0) {
-        await bumpDailyUsage(day, config.provider)
+      if (onboardingPool) {
+        if (caps[config.provider] > 0) {
+          await bumpDailyUsage(day, config.provider)
+        }
+        if (perUserLimit > 0 && input.userId) {
+          await bumpUserDailyUsage(day, input.userId)
+        }
       }
 
       return result

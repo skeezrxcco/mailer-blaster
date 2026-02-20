@@ -1,4 +1,4 @@
-# AI Newsletter Agent - Backend Context
+# Blastermailer - Backend Context
 
 Last updated: 2026-02-19
 

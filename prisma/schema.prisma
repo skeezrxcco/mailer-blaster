@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
   engineType = "binary"
 }
 
@@ -19,29 +19,29 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  contacts      Contact[]
-  campaigns     Campaign[]
-  jobs          Job[] 
-  messages      Message[]
-  emails        EmailMessage[]
-  authCodes     AuthCode[]
+  accounts  Account[]
+  sessions  Session[]
+  contacts  Contact[]
+  campaigns Campaign[]
+  jobs      Job[]
+  messages  Message[]
+  emails    EmailMessage[]
+  authCodes AuthCode[]
 }
 
 model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String? @db.Text
+  access_token             String? @db.Text
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String? @db.Text
+  session_state            String?
   refresh_token_expires_in Int?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -82,38 +82,38 @@ model Contact {
 }
 
 model Campaign {
-  id              String         @id @default(cuid())
-  userId          String
-  name            String
-  templateId      String?
-  status          CampaignStatus @default(DRAFT)
-  audienceCount   Int            @default(0)
-  scheduledFor    DateTime?
-  queuedAt        DateTime?
-  startedAt       DateTime?
-  sentAt          DateTime?
-  failedAt        DateTime?
-  errorMessage    String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id            String         @id @default(cuid())
+  userId        String
+  name          String
+  templateId    String?
+  status        CampaignStatus @default(DRAFT)
+  audienceCount Int            @default(0)
+  scheduledFor  DateTime?
+  queuedAt      DateTime?
+  startedAt     DateTime?
+  sentAt        DateTime?
+  failedAt      DateTime?
+  errorMessage  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Job {
-  id           String    @id @default(cuid())
-  userId       String?
-  type         String
-  status       JobStatus @default(QUEUED)
-  payload      Json
-  result       Json?
-  error        String?
-  attempts     Int       @default(0)
-  availableAt  DateTime  @default(now())
-  startedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  userId      String?
+  type        String
+  status      JobStatus @default(QUEUED)
+  payload     Json
+  result      Json?
+  error       String?
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -154,13 +154,13 @@ model EmailMessage {
 }
 
 model AuthCode {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   purpose    String
   codeHash   String
   expiresAt  DateTime
   consumedAt DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -178,6 +178,29 @@ model AiProviderDailyUsage {
 
   @@unique([day, provider])
   @@index([provider, day])
+}
+
+model AiUserDailyUsage {
+  id        String   @id @default(cuid())
+  day       String
+  userId    String
+  requests  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([day, userId])
+  @@index([userId, day])
+}
+
+model WaitingList {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  source    String   @default("landing-page")
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum CampaignStatus {

@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 25
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_newsletter_agent?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/blastermailer?schema=public
       AUTH_SECRET: ci-auth-secret
       NEXTAUTH_SECRET: ci-nextauth-secret
       AUTH_EMAIL_FROM: ci@example.com

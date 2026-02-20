@@ -5,7 +5,7 @@ Last updated: 2026-02-20
 ## 0) Delivery Baseline
 
 - [x] Define route map and user journey (`/login`, `/signup`, `/chat`, `/templates`, `/contacts`, `/activity`, `/campaigns`, `/settings`, `/pricing`, `/checkout`)
-- [x] Add Docker-based local infrastructure (Postgres, Redis, NATS, Mailpit, Ollama)
+- [x] Add Docker-based local infrastructure (Postgres, Redis, NATS, Mailpit)
 - [x] Add Makefile-driven local operations
 - [x] Add CI workflow for checks on every branch push
 - [x] Add deployment workflow for production deploy on `main`
@@ -45,7 +45,7 @@ Last updated: 2026-02-20
 
 ## 4) AI Chat Orchestration
 
-- [x] Add AI provider abstraction with OpenAI/Ollama auto fallback
+- [x] Add API-only multi-provider AI routing (OpenAI, Anthropic/Claude, DeepSeek, Grok/xAI, Llama API) with fallback
 - [ ] Do not persist chat threads and messages on this DB only of the AI provider does not persist them (not only ephemeral)
 - [ ] Implement chat workflow state machine persistence and resume
 - [ ] Add bot typing streaming with token-by-token server events

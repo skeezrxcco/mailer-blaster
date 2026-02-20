@@ -3,7 +3,7 @@ import { defineConfig } from "prisma/config"
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    url: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/ai_newsletter_agent?schema=public",
+    url: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/blastermailer?schema=public",
   },
   migrations: {
     path: "prisma/migrations",

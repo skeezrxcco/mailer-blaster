@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
 echo "[docker-prod] Generating Prisma client..."
 npm run db:generate
 
