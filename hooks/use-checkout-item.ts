@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 
 export type CheckoutItem = {
   id: string
-  kind: "plan" | "emails" | "smtp"
+  kind: "plan" | "emails" | "smtp" | "template"
   name: string
   description: string
   price: number

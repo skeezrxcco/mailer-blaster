@@ -1,7 +1,9 @@
-import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { getServerSession } from "next-auth"
+
+import { authOptions } from "@/lib/auth"
 
 export default async function Home() {
-  const sessionToken = (await cookies()).get("session-token")?.value
-  redirect(sessionToken ? "/chat" : "/login")
+  const session = await getServerSession(authOptions)
+  redirect(session ? "/chat" : "/login")
 }

@@ -1,7 +1,8 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { type DragEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowUpDown, Monitor, Pencil, PencilLine, Search, Smartphone, Sparkles, TabletSmartphone, Upload } from "lucide-react"
+import { ArrowUpDown, Monitor, Pencil, Search, Smartphone, Sparkles, TabletSmartphone, Upload } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,8 @@ import {
   type TemplateOption,
 } from "@/components/shared/newsletter/template-data"
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
+import { useCheckoutItem } from "@/hooks/use-checkout-item"
+import { useMyTemplates } from "@/hooks/use-my-templates"
 import { cn } from "@/lib/utils"
 
 type PreviewMode = "desktop" | "tablet" | "mobile"
@@ -480,7 +483,7 @@ function TemplatePreviewModal({
   viewport,
   onViewportChange,
   onClose,
-  onEdit,
+  onPrimaryAction,
 }: {
   template: TemplateOption
   data: TemplateEditorData
@@ -489,21 +492,15 @@ function TemplatePreviewModal({
   viewport: PreviewMode
   onViewportChange: (mode: PreviewMode) => void
   onClose: () => void
-  onEdit: () => void
+  onPrimaryAction: () => void
 }) {
+  const ctaLabel = template.priceUsd ? `Buy template - $${template.priceUsd}` : "Select template"
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div className="flex h-full flex-col p-2 md:p-4" onClick={(event) => event.stopPropagation()}>
         <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
           <ViewportSwitch mode={viewport} onChange={onViewportChange} />
-          <Button
-            size="icon"
-            onClick={onEdit}
-            className="size-10 rounded-full bg-zinc-900/90 p-0 text-zinc-100 hover:bg-zinc-800"
-            aria-label="Edit template"
-          >
-            <PencilLine className="h-4 w-4" />
-          </Button>
           <Button
             size="icon"
             onClick={onClose}
@@ -531,6 +528,19 @@ function TemplatePreviewModal({
               onSwapDish={() => undefined}
             />
           </DevicePreviewFrame>
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex justify-center px-4">
+          <Button
+            type="button"
+            onClick={onPrimaryAction}
+            className={cn(
+              "pointer-events-auto h-11 min-w-[220px] rounded-full px-6",
+              template.priceUsd ? "bg-emerald-400 text-zinc-950 hover:bg-emerald-300" : "bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
+            )}
+          >
+            {ctaLabel}
+          </Button>
         </div>
       </div>
     </div>
@@ -865,6 +875,10 @@ function TemplateLibraryCard({
 }
 
 export function TemplatesPageClient() {
+  const router = useRouter()
+  const { setCheckoutItem } = useCheckoutItem()
+  const { myTemplateIds, addTemplateId } = useMyTemplates()
+
   const [activeTemplate, setActiveTemplate] = useState<TemplateOption | null>(null)
   const [templateData, setTemplateData] = useState<TemplateEditorData | null>(null)
   const [themeState, setThemeState] = useState<EditorThemeState | null>(null)
@@ -877,10 +891,13 @@ export function TemplatesPageClient() {
   const [domainFilter, setDomainFilter] = useState("all")
   const [priceFilter, setPriceFilter] = useState("all")
   const [sortBy, setSortBy] = useState("featured")
+  const [libraryTab, setLibraryTab] = useState<"marketplace" | "myTemplates">("marketplace")
 
   const availableDomains = useMemo(() => {
     return Array.from(new Set(templateOptions.map((template) => template.domain))).sort((a, b) => a.localeCompare(b))
   }, [])
+  const myTemplateIdSet = useMemo(() => new Set(myTemplateIds), [myTemplateIds])
+  const myTemplatesCount = useMemo(() => templateOptions.filter((template) => myTemplateIdSet.has(template.id)).length, [myTemplateIdSet])
 
   const filteredTemplates = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase()
@@ -913,6 +930,10 @@ export function TemplatesPageClient() {
     }
     return filtered
   }, [domainFilter, priceFilter, searchValue, sortBy])
+  const visibleTemplates = useMemo(() => {
+    if (libraryTab === "marketplace") return filteredTemplates
+    return filteredTemplates.filter((template) => myTemplateIdSet.has(template.id))
+  }, [filteredTemplates, libraryTab, myTemplateIdSet])
 
   const hydrateTemplate = (template: TemplateOption) => {
     setActiveTemplate(template)
@@ -927,12 +948,66 @@ export function TemplatesPageClient() {
     setIsPreviewOpen(true)
   }
 
+  const selectTemplate = (template: TemplateOption) => {
+    addTemplateId(template.id)
+    setIsPreviewOpen(false)
+    router.push(`/chat?template=${template.id}`)
+  }
+
+  const buyTemplate = (template: TemplateOption) => {
+    if (!template.priceUsd) {
+      selectTemplate(template)
+      return
+    }
+
+    addTemplateId(template.id)
+    setCheckoutItem({
+      id: `tpl-${template.id}`,
+      kind: "template",
+      name: template.name,
+      description: "Template license purchase",
+      price: template.priceUsd,
+      billing: "one-time",
+    })
+    setIsPreviewOpen(false)
+    router.push("/checkout")
+  }
+
   return (
     <WorkspaceShell tab="templates" pageTitle="Template library">
       <div data-workspace-scroll className="scrollbar-hide h-full min-h-0 overflow-y-auto p-4 md:p-6">
         <div className="mb-4 space-y-1">
           <h2 className="text-xl font-semibold text-zinc-100">Template library</h2>
           <p className="text-sm text-zinc-400">Browse minimal template options, then open preview.</p>
+        </div>
+
+        <div className="mb-4 inline-flex items-center gap-1 rounded-xl bg-zinc-900/70 p-1">
+          <button
+            type="button"
+            onClick={() => setLibraryTab("marketplace")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition",
+              libraryTab === "marketplace" ? "bg-zinc-100 text-zinc-900" : "text-zinc-300 hover:bg-zinc-800/80",
+            )}
+          >
+            Marketplace
+            <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", libraryTab === "marketplace" ? "bg-zinc-900/10" : "bg-zinc-800 text-zinc-300")}>
+              {templateOptions.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setLibraryTab("myTemplates")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition",
+              libraryTab === "myTemplates" ? "bg-zinc-100 text-zinc-900" : "text-zinc-300 hover:bg-zinc-800/80",
+            )}
+          >
+            My Templates
+            <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", libraryTab === "myTemplates" ? "bg-zinc-900/10" : "bg-zinc-800 text-zinc-300")}>
+              {myTemplatesCount}
+            </span>
+          </button>
         </div>
 
         <div className="mb-6 space-y-3">
@@ -999,7 +1074,7 @@ export function TemplatesPageClient() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredTemplates.map((template) => (
+          {visibleTemplates.map((template) => (
             <TemplateLibraryCard
               key={template.id}
               template={template}
@@ -1007,7 +1082,10 @@ export function TemplatesPageClient() {
             />
           ))}
         </div>
-        {!filteredTemplates.length ? <p className="mt-6 text-sm text-zinc-400">No templates match your current filters.</p> : null}
+        {!visibleTemplates.length && libraryTab === "marketplace" ? <p className="mt-6 text-sm text-zinc-400">No templates match your current filters.</p> : null}
+        {!visibleTemplates.length && libraryTab === "myTemplates" ? (
+          <p className="mt-6 text-sm text-zinc-400">No templates in your library yet. Select or buy one from marketplace.</p>
+        ) : null}
       </div>
 
       {isPreviewOpen && activeTemplate && templateData && themeState ? (
@@ -1019,10 +1097,13 @@ export function TemplatesPageClient() {
           viewport={previewViewport}
           onViewportChange={setPreviewViewport}
           onClose={() => setIsPreviewOpen(false)}
-          onEdit={() => {
-            setIsPreviewOpen(false)
-            setEditorViewport("desktop")
-            setIsEditorOpen(true)
+          onPrimaryAction={() => {
+            if (!activeTemplate) return
+            if (activeTemplate.priceUsd) {
+              buyTemplate(activeTemplate)
+              return
+            }
+            selectTemplate(activeTemplate)
           }}
         />
       ) : null}

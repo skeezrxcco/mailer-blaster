@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
-import { Chrome, Github, Loader2, LogIn } from "lucide-react"
+import { Chrome, Eye, EyeOff, Github, Loader2, LogIn } from "lucide-react"
+import { signIn as authSignIn } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,17 +17,26 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [code, setCode] = useState("")
   const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSendingCode, setIsSendingCode] = useState(false)
   const [socialLoading, setSocialLoading] = useState<"google" | "github" | null>(null)
 
-  const signIn = async (event: React.FormEvent) => {
-    event.preventDefault()
+  const requestCode = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError("Enter email and password first.")
+      return false
+    }
+
     setError("")
-    setIsLoading(true)
+    setNotice("")
+    setIsSendingCode(true)
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch("/api/auth/send-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -36,10 +46,45 @@ export default function LoginPage() {
 
       if (!response.ok) {
         const payload = (await response.json()) as { error?: string }
-        throw new Error(payload.error || "Unable to sign in")
+        throw new Error(payload.error || "Unable to send code")
       }
 
-      router.push(nextPath)
+      setNotice("Verification code sent. Check your email and enter the 6-digit code.")
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to send code")
+      return false
+    } finally {
+      setIsSendingCode(false)
+    }
+  }
+
+  const handleCredentialsSignIn = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setError("")
+    setNotice("")
+
+    if (!code.trim()) {
+      await requestCode()
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const result = await authSignIn("credentials", {
+        email,
+        password,
+        code,
+        redirect: false,
+        callbackUrl: nextPath,
+      })
+
+      if (result?.error) {
+        throw new Error("Invalid email, password, or verification code")
+      }
+
+      router.push(result?.url ?? nextPath)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in")
@@ -53,21 +98,7 @@ export default function LoginPage() {
     setSocialLoading(provider)
 
     try {
-      const response = await fetch("/api/auth/social", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ provider }),
-      })
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string }
-        throw new Error(payload.error || "Unable to sign in")
-      }
-
-      router.push(nextPath)
-      router.refresh()
+      await authSignIn(provider, { callbackUrl: nextPath })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in")
     } finally {
@@ -127,7 +158,7 @@ export default function LoginPage() {
               <div className="h-px flex-1 bg-zinc-800" />
             </div>
 
-            <form className="space-y-3" onSubmit={signIn}>
+            <form className="space-y-3" onSubmit={handleCredentialsSignIn}>
               <Input
                 type="email"
                 value={email}
@@ -136,20 +167,48 @@ export default function LoginPage() {
                 required
                 className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
               />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Password"
+                  required
+                  className="h-11 border-zinc-700 bg-zinc-900 pr-11 text-zinc-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               <Input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Password"
-                required
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="6-digit verification code"
                 className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
+                inputMode="numeric"
               />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSendingCode}
+                onClick={requestCode}
+                className="h-10 w-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+              >
+                {isSendingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {isSendingCode ? "Sending code..." : "Send verification code"}
+              </Button>
               <Button type="submit" disabled={isLoading} className="h-11 w-full bg-sky-500 text-zinc-950 hover:bg-sky-400">
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Sign in
               </Button>
             </form>
 
             {error ? <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
+            {notice ? <p className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{notice}</p> : null}
 
             <p className="text-sm text-zinc-400">
               No account yet?{" "}

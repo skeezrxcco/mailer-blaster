@@ -1,0 +1,196 @@
+name: Deploy On Main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-main-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Run checks before deploy
+    uses: ./.github/workflows/checks.yml
+
+  build:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    needs: checks
+    timeout-minutes: 30
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+      image_ref: ${{ steps.vars.outputs.image_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set build vars
+        id: vars
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          image_tag="sha-${short_sha}"
+          image_ref="skeezrxcco/mailerblaster:${image_tag}"
+          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.prod
+          push: true
+          tags: |
+            skeezrxcco/mailerblaster:latest
+            ${{ steps.vars.outputs.image_ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 30
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      IMAGE_REF: ${{ needs.build.outputs.image_ref }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+      AUTH_URL: ${{ secrets.AUTH_URL }}
+      NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+      AUTH_TRUST_HOST: ${{ secrets.AUTH_TRUST_HOST }}
+      AUTH_EMAIL_FROM: ${{ secrets.AUTH_EMAIL_FROM }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASS: ${{ secrets.SMTP_PASS }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      NATS_URL: ${{ secrets.NATS_URL }}
+      AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+      OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+      OLLAMA_MODEL: ${{ secrets.OLLAMA_MODEL }}
+      AUTH_CODE_TTL_MINUTES: ${{ secrets.AUTH_CODE_TTL_MINUTES }}
+      AUTH_CODE_RESEND_COOLDOWN_SECONDS: ${{ secrets.AUTH_CODE_RESEND_COOLDOWN_SECONDS }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required deploy secrets
+        run: |
+          set -e
+          missing=0
+          for key in VPS_HOST VPS_USER VPS_SSH_KEY DOCKERHUB_USERNAME DOCKERHUB_TOKEN POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB AUTH_SECRET NEXTAUTH_SECRET AUTH_URL NEXTAUTH_URL AUTH_TRUST_HOST AUTH_EMAIL_FROM EMAIL_FROM SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS REDIS_URL NATS_URL AI_PROVIDER OPENAI_BASE_URL OPENAI_MODEL OLLAMA_BASE_URL OLLAMA_MODEL AUTH_CODE_TTL_MINUTES AUTH_CODE_RESEND_COOLDOWN_SECONDS; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Start ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ env.VPS_SSH_KEY }}
+
+      - name: Add VPS host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare production env file
+        run: |
+          {
+            printf 'NODE_ENV=production\n'
+            printf 'DOCKERHUB_IMAGE=%s\n' "$IMAGE_REF"
+            printf 'POSTGRES_USER=%s\n' "$POSTGRES_USER"
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'POSTGRES_DB=%s\n' "$POSTGRES_DB"
+            printf 'DATABASE_URL=postgresql://%s:%s@db:5432/%s?schema=public\n' "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB"
+            printf 'AUTH_SECRET=%s\n' "$AUTH_SECRET"
+            printf 'NEXTAUTH_SECRET=%s\n' "$NEXTAUTH_SECRET"
+            printf 'AUTH_URL=%s\n' "$AUTH_URL"
+            printf 'NEXTAUTH_URL=%s\n' "$NEXTAUTH_URL"
+            printf 'AUTH_TRUST_HOST=%s\n' "$AUTH_TRUST_HOST"
+            printf 'AUTH_EMAIL_FROM=%s\n' "$AUTH_EMAIL_FROM"
+            printf 'EMAIL_FROM=%s\n' "$EMAIL_FROM"
+            printf 'SMTP_HOST=%s\n' "$SMTP_HOST"
+            printf 'SMTP_PORT=%s\n' "$SMTP_PORT"
+            printf 'SMTP_USER=%s\n' "$SMTP_USER"
+            printf 'SMTP_PASS=%s\n' "$SMTP_PASS"
+            printf 'REDIS_URL=%s\n' "$REDIS_URL"
+            printf 'NATS_URL=%s\n' "$NATS_URL"
+            printf 'AI_PROVIDER=%s\n' "$AI_PROVIDER"
+            printf 'OPENAI_BASE_URL=%s\n' "$OPENAI_BASE_URL"
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            printf 'OPENAI_MODEL=%s\n' "$OPENAI_MODEL"
+            printf 'OLLAMA_BASE_URL=%s\n' "$OLLAMA_BASE_URL"
+            printf 'OLLAMA_MODEL=%s\n' "$OLLAMA_MODEL"
+            printf 'AUTH_CODE_TTL_MINUTES=%s\n' "$AUTH_CODE_TTL_MINUTES"
+            printf 'AUTH_CODE_RESEND_COOLDOWN_SECONDS=%s\n' "$AUTH_CODE_RESEND_COOLDOWN_SECONDS"
+            printf 'STRIPE_SECRET_KEY=%s\n' "$STRIPE_SECRET_KEY"
+            printf 'STRIPE_WEBHOOK_SECRET=%s\n' "$STRIPE_WEBHOOK_SECRET"
+          } > .env.production
+
+      - name: Upload compose and env to VPS
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" "mkdir -p /opt/mailerblaster"
+          scp docker-compose.prod.yml "$VPS_USER@$VPS_HOST:/opt/mailerblaster/docker-compose.prod.yml"
+          scp .env.production "$VPS_USER@$VPS_HOST:/opt/mailerblaster/.env.production"
+
+      - name: Deploy containers on VPS
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" "
+            set -e
+            cd /opt/mailerblaster
+            echo '$DOCKERHUB_TOKEN' | docker login -u '$DOCKERHUB_USERNAME' --password-stdin
+            docker compose -f docker-compose.prod.yml --env-file .env.production pull
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml --env-file .env.production ps
+          "
+
+      - name: Warm-up Ollama model pull (best effort)
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" "
+            set +e
+            cd /opt/mailerblaster
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T ollama ollama pull ${OLLAMA_MODEL:-llama3.2:3b}
+            exit 0
+          "
+
+      - name: Deployment summary
+        run: |
+          {
+            echo '### VPS deployment completed'
+            echo "- Branch: \`${{ github.ref_name }}\`"
+            echo "- Image: \`${IMAGE_REF}\`"
+            echo "- Server: \`${VPS_HOST}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

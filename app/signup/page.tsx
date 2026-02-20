@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Chrome, Github, Loader2, UserPlus } from "lucide-react"
+import { Chrome, Eye, EyeOff, Github, Loader2, UserPlus } from "lucide-react"
+import { signIn as authSignIn } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,17 +16,24 @@ export default function SignupPage() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [code, setCode] = useState("")
   const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [isSendingCode, setIsSendingCode] = useState(false)
+  const [awaitingVerification, setAwaitingVerification] = useState(false)
   const [socialLoading, setSocialLoading] = useState<"google" | "github" | null>(null)
 
   const signUp = async (event: React.FormEvent) => {
     event.preventDefault()
     setError("")
+    setNotice("")
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/auth/signup", {
+      const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -38,12 +46,72 @@ export default function SignupPage() {
         throw new Error(payload.error || "Unable to create account")
       }
 
-      router.push("/chat")
-      router.refresh()
+      setAwaitingVerification(true)
+      setNotice("Account created. We sent a 6-digit verification code to your email.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create account")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const sendCode = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError("Enter email and password first.")
+      return
+    }
+
+    setIsSendingCode(true)
+    setError("")
+    setNotice("")
+
+    try {
+      const response = await fetch("/api/auth/send-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string }
+        throw new Error(payload.error || "Unable to send code")
+      }
+
+      setAwaitingVerification(true)
+      setNotice("Verification code sent. Check your email.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to send code")
+    } finally {
+      setIsSendingCode(false)
+    }
+  }
+
+  const verifyAndContinue = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setError("")
+    setNotice("")
+    setIsVerifying(true)
+
+    try {
+      const signInResult = await authSignIn("credentials", {
+        email,
+        password,
+        code,
+        redirect: false,
+        callbackUrl: "/chat",
+      })
+      if (signInResult?.error) {
+        throw new Error("Invalid verification code.")
+      }
+
+      router.push(signInResult?.url ?? "/chat")
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to verify code")
+    } finally {
+      setIsVerifying(false)
     }
   }
 
@@ -52,21 +120,7 @@ export default function SignupPage() {
     setSocialLoading(provider)
 
     try {
-      const response = await fetch("/api/auth/social", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ provider }),
-      })
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string }
-        throw new Error(payload.error || "Unable to sign in")
-      }
-
-      router.push("/chat")
-      router.refresh()
+      await authSignIn(provider, { callbackUrl: "/chat" })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in")
     } finally {
@@ -126,36 +180,75 @@ export default function SignupPage() {
               <div className="h-px flex-1 bg-zinc-800" />
             </div>
 
-            <form className="space-y-3" onSubmit={signUp}>
-              <Input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Full name"
-                required
-                className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
-              />
-              <Input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="name@company.com"
-                required
-                className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
-              />
-              <Input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="At least 8 characters"
-                required
-                className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
-              />
-              <Button type="submit" disabled={isLoading} className="h-11 w-full bg-sky-500 text-zinc-950 hover:bg-sky-400">
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Create account
-              </Button>
-            </form>
+            {!awaitingVerification ? (
+              <form className="space-y-3" onSubmit={signUp}>
+                <Input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Full name"
+                  required
+                  className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
+                />
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="name@company.com"
+                  required
+                  className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
+                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="At least 8 characters"
+                    required
+                    className="h-11 border-zinc-700 bg-zinc-900 pr-11 text-zinc-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button type="submit" disabled={isLoading} className="h-11 w-full bg-sky-500 text-zinc-950 hover:bg-sky-400">
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Create account
+                </Button>
+              </form>
+            ) : (
+              <form className="space-y-3" onSubmit={verifyAndContinue}>
+                <Input value={email} readOnly className="h-11 border-zinc-700 bg-zinc-900 text-zinc-400" />
+                <Input
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6-digit verification code"
+                  className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
+                  inputMode="numeric"
+                  required
+                />
+                <Button type="submit" disabled={isVerifying} className="h-11 w-full bg-sky-500 text-zinc-950 hover:bg-sky-400">
+                  {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {isVerifying ? "Verifying..." : "Verify and continue"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSendingCode}
+                  onClick={sendCode}
+                  className="h-10 w-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                >
+                  {isSendingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {isSendingCode ? "Sending code..." : "Resend code"}
+                </Button>
+              </form>
+            )}
 
             {error ? <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
+            {notice ? <p className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{notice}</p> : null}
 
             <p className="text-sm text-zinc-400">
               Already have an account?{" "}
