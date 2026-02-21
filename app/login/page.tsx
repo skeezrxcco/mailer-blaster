@@ -269,6 +269,12 @@ function LoginPageContent() {
                 Create one
               </Link>
             </p>
+            <p className="text-sm text-zinc-400">
+              Forgot your password?{" "}
+              <Link href="/reset-password" className="font-medium text-sky-300 hover:text-sky-200">
+                Reset it
+              </Link>
+            </p>
           </CardContent>
         </Card>
       </div>

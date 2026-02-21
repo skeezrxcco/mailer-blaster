@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
 const protectedPrefixes = ["/chat", "/templates", "/contacts", "/activity", "/campaigns", "/settings", "/pricing", "/checkout"]
-const authPages = ["/login", "/signup"]
+const authPages = ["/login", "/signup", "/reset-password"]
 
 function isProtectedPath(pathname: string) {
   return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
@@ -65,4 +65,3 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: ["/:path*"],
 }
-

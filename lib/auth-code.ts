@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 
 const AUTH_CODE_TTL_MINUTES = Number(process.env.AUTH_CODE_TTL_MINUTES ?? "10")
 const AUTH_CODE_RESEND_COOLDOWN_SECONDS = Number(process.env.AUTH_CODE_RESEND_COOLDOWN_SECONDS ?? "30")
+export type AuthCodePurpose = "login" | "password_reset"
 
 function hashCode(code: string) {
   return createHash("sha256").update(code).digest("hex")
@@ -24,7 +25,7 @@ function expiresAtFromNow() {
 export async function createAndSendAuthCode(input: {
   userId: string
   email: string
-  purpose: "login"
+  purpose: AuthCodePurpose
 }) {
   const now = new Date()
   const latestCode = await prisma.authCode.findFirst({
@@ -63,9 +64,15 @@ export async function createAndSendAuthCode(input: {
 
   await sendEmail({
     to: input.email,
-    subject: "Your verification code",
-    html: `<p>Your verification code is:</p><p style="font-size:28px;letter-spacing:6px;font-weight:700">${code}</p><p>This code expires in ${AUTH_CODE_TTL_MINUTES} minutes.</p>`,
-    text: `Your verification code is ${code}. It expires in ${AUTH_CODE_TTL_MINUTES} minutes.`,
+    subject: input.purpose === "password_reset" ? "Your password reset code" : "Your verification code",
+    html:
+      input.purpose === "password_reset"
+        ? `<p>Use this code to reset your password:</p><p style="font-size:28px;letter-spacing:6px;font-weight:700">${code}</p><p>This code expires in ${AUTH_CODE_TTL_MINUTES} minutes. If you did not request this, you can ignore this email.</p>`
+        : `<p>Your verification code is:</p><p style="font-size:28px;letter-spacing:6px;font-weight:700">${code}</p><p>This code expires in ${AUTH_CODE_TTL_MINUTES} minutes.</p>`,
+    text:
+      input.purpose === "password_reset"
+        ? `Use this code to reset your password: ${code}. It expires in ${AUTH_CODE_TTL_MINUTES} minutes.`
+        : `Your verification code is ${code}. It expires in ${AUTH_CODE_TTL_MINUTES} minutes.`,
   })
 
   return {
@@ -76,7 +83,7 @@ export async function createAndSendAuthCode(input: {
 
 export async function verifyAndConsumeAuthCode(input: {
   userId: string
-  purpose: "login"
+  purpose: AuthCodePurpose
   code: string
 }) {
   const normalizedCode = input.code.trim()

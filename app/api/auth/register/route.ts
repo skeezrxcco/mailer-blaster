@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 
+import { buildRateLimitKey, checkRateLimit } from "@/lib/auth-rate-limit"
+import { recordAuthEvent } from "@/lib/auth-security"
 import { createAndSendAuthCode } from "@/lib/auth-code"
+import { ensureDevAuthSchema } from "@/lib/auth-schema-bootstrap"
 import { hashPassword } from "@/lib/password"
 import { prisma } from "@/lib/prisma"
+import { extractClientIp, extractUserAgent } from "@/lib/request-context"
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -11,6 +15,11 @@ function isValidEmail(email: string) {
 
 export async function POST(request: Request) {
   try {
+    await ensureDevAuthSchema()
+
+    const ipAddress = extractClientIp(request.headers)
+    const userAgent = extractUserAgent(request.headers)
+
     const body = (await request.json()) as {
       name?: string
       email?: string
@@ -20,6 +29,46 @@ export async function POST(request: Request) {
     const name = body.name?.trim() ?? ""
     const email = body.email?.trim().toLowerCase() ?? ""
     const password = body.password ?? ""
+
+    const ipRate = checkRateLimit({
+      key: buildRateLimitKey(["register", "ip", ipAddress]),
+      limit: 12,
+      windowSeconds: 60 * 60,
+    })
+    if (!ipRate.allowed) {
+      await recordAuthEvent({
+        type: "register_rate_limited",
+        severity: "warn",
+        email,
+        ipAddress,
+        userAgent,
+        metadata: { retryAfterSeconds: ipRate.retryAfterSeconds, scope: "ip" },
+      })
+      return NextResponse.json(
+        { error: `Too many registration attempts. Try again in ${ipRate.retryAfterSeconds}s.` },
+        { status: 429 },
+      )
+    }
+
+    const emailRate = checkRateLimit({
+      key: buildRateLimitKey(["register", "email", email]),
+      limit: 5,
+      windowSeconds: 60 * 60,
+    })
+    if (!emailRate.allowed) {
+      await recordAuthEvent({
+        type: "register_rate_limited",
+        severity: "warn",
+        email,
+        ipAddress,
+        userAgent,
+        metadata: { retryAfterSeconds: emailRate.retryAfterSeconds, scope: "email" },
+      })
+      return NextResponse.json(
+        { error: `Too many attempts for this email. Try again in ${emailRate.retryAfterSeconds}s.` },
+        { status: 429 },
+      )
+    }
 
     if (name.length < 2) {
       return NextResponse.json({ error: "Name must have at least 2 characters" }, { status: 422 })
@@ -38,6 +87,7 @@ export async function POST(request: Request) {
         name,
         email,
         passwordHash,
+        emailVerified: null,
       },
       select: {
         id: true,

@@ -6,6 +6,9 @@
 - Email/password uses two steps:
   1. Validate email/password and send 6-digit code.
   2. Verify code and create session.
+- Password reset uses two API steps:
+  1. `POST /api/auth/password-reset/request` to send a 6-digit reset code.
+  2. `POST /api/auth/password-reset/confirm` to verify code and set a new password.
 - OTP/code flow is only for non-social auth.
 
 ## Required environment variables
@@ -59,6 +62,8 @@ If you need both simultaneously, keep separate OAuth apps (local + prod), with s
 - `AUTH_URL=http://localhost:3000`
 - `NEXTAUTH_URL=http://localhost:3000`
 - If you run on a different port, update both values and ensure OAuth redirect URI includes that port.
+- `npm run dev` now runs a `prisma db push` preflight automatically in local dev to avoid missing Auth.js tables (`Account`, `Session`, `VerificationToken`).
+- Auth endpoints also run a local-only schema bootstrap fallback, so OAuth callbacks can recover from missing auth tables without manual SQL.
 
 ## Security notes
 
