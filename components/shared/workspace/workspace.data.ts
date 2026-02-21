@@ -50,7 +50,7 @@ export const pageTitleMap: Record<SidebarTab, string> = {
 export const workspaceStaticData = {
   credits: 120,
   maxCredits: 120,
-  expandedTitle: "mailerblaster AI",
+  expandedTitle: "blastermailer AI",
   settingsTitle: "Settings",
   drawerNavigationTitle: "Navigation",
   settingsDrawerDescription: "Manage account, plan, and billing.",

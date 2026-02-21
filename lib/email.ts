@@ -13,7 +13,7 @@ export type SendEmailResult = {
   id?: string
 }
 
-const defaultFrom = process.env.EMAIL_FROM ?? process.env.AUTH_EMAIL_FROM ?? "no-reply@mailerblaster.ai"
+const defaultFrom = process.env.EMAIL_FROM ?? process.env.AUTH_EMAIL_FROM ?? "no-reply@blastermailer.ai"
 
 async function sendWithResend(input: SendEmailInput): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY ?? process.env.AUTH_RESEND_API_KEY

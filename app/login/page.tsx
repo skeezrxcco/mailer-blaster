@@ -10,10 +10,28 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 
+function getAuthErrorMessage(code: string | null) {
+  switch (code) {
+    case "OAuthSignin":
+    case "OAuthCallback":
+      return "Social login failed to start. Check OAuth redirect URLs and client secrets."
+    case "OAuthAccountNotLinked":
+      return "This email is already linked to another sign-in method."
+    case "AccessDenied":
+      return "Access was denied by the provider."
+    case "Configuration":
+      return "Auth provider is misconfigured. Check environment variables."
+    default:
+      return ""
+  }
+}
+
 function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextPath = searchParams.get("next") || "/chat"
+  const oauthErrorCode = searchParams.get("error")
+  const oauthErrorMessage = getAuthErrorMessage(oauthErrorCode)
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -23,6 +41,7 @@ function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSendingCode, setIsSendingCode] = useState(false)
+  const [authStep, setAuthStep] = useState<"credentials" | "verification">("credentials")
   const [socialLoading, setSocialLoading] = useState<"google" | "github" | null>(null)
 
   const requestCode = async () => {
@@ -50,6 +69,7 @@ function LoginPageContent() {
       }
 
       setNotice("Verification code sent. Check your email and enter the 6-digit code.")
+      setAuthStep("verification")
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to send code")
@@ -59,13 +79,18 @@ function LoginPageContent() {
     }
   }
 
+  const handleCredentialsStart = async (event: React.FormEvent) => {
+    event.preventDefault()
+    await requestCode()
+  }
+
   const handleCredentialsSignIn = async (event: React.FormEvent) => {
     event.preventDefault()
     setError("")
     setNotice("")
 
     if (!code.trim()) {
-      await requestCode()
+      setError("Enter the 6-digit code sent to your email.")
       return
     }
 
@@ -113,7 +138,7 @@ function LoginPageContent() {
       <div className="grid w-full max-w-5xl overflow-hidden rounded-[32px] bg-zinc-950/70 shadow-[0_32px_90px_rgba(0,0,0,0.45)] md:grid-cols-2">
         <section className="hidden flex-col justify-between bg-[radial-gradient(circle_at_top_left,#0f766e_0%,#0f172a_58%,#020617_100%)] p-8 md:flex">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/80">mailerblaster AI</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/80">blastermailer AI</p>
             <h1 className="mt-4 text-3xl font-semibold text-zinc-100">Run campaigns faster with AI templates and automation.</h1>
             <p className="mt-3 text-sm leading-relaxed text-zinc-300">
               Generate polished restaurant newsletters, manage audiences, and ship in minutes from one workspace.
@@ -154,60 +179,88 @@ function LoginPageContent() {
 
             <div className="flex items-center gap-3 py-1">
               <div className="h-px flex-1 bg-zinc-800" />
-              <span className="text-xs uppercase tracking-wide text-zinc-500">Or sign in with email</span>
+              <span className="text-xs uppercase tracking-wide text-zinc-500">Email sign in (2 steps)</span>
               <div className="h-px flex-1 bg-zinc-800" />
             </div>
 
-            <form className="space-y-3" onSubmit={handleCredentialsSignIn}>
-              <Input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="name@company.com"
-                required
-                className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
-              />
-              <div className="relative">
+            {authStep === "credentials" ? (
+              <form className="space-y-3" onSubmit={handleCredentialsStart}>
                 <Input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Password"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="name@company.com"
                   required
-                  className="h-11 border-zinc-700 bg-zinc-900 pr-11 text-zinc-100"
+                  className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
                 />
-                <button
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Password"
+                    required
+                    className="h-11 border-zinc-700 bg-zinc-900 pr-11 text-zinc-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button type="submit" disabled={isSendingCode} className="h-11 w-full bg-sky-500 text-zinc-950 hover:bg-sky-400">
+                  {isSendingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                  {isSendingCode ? "Sending code..." : "Continue"}
+                </Button>
+              </form>
+            ) : (
+              <form className="space-y-3" onSubmit={handleCredentialsSignIn}>
+                <Input value={email} readOnly className="h-11 border-zinc-700 bg-zinc-900 text-zinc-400" />
+                <Input
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6-digit verification code"
+                  className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
+                  inputMode="numeric"
+                  required
+                />
+                <Button type="submit" disabled={isLoading} className="h-11 w-full bg-sky-500 text-zinc-950 hover:bg-sky-400">
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Sign in
+                </Button>
+                <Button
                   type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  variant="outline"
+                  disabled={isSendingCode}
+                  onClick={requestCode}
+                  className="h-10 w-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <Input
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="6-digit verification code"
-                className="h-11 border-zinc-700 bg-zinc-900 text-zinc-100"
-                inputMode="numeric"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isSendingCode}
-                onClick={requestCode}
-                className="h-10 w-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
-              >
-                {isSendingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isSendingCode ? "Sending code..." : "Send verification code"}
-              </Button>
-              <Button type="submit" disabled={isLoading} className="h-11 w-full bg-sky-500 text-zinc-950 hover:bg-sky-400">
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Sign in
-              </Button>
-            </form>
+                  {isSendingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {isSendingCode ? "Sending code..." : "Resend code"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setAuthStep("credentials")
+                    setCode("")
+                    setError("")
+                    setNotice("")
+                  }}
+                  className="h-10 w-full text-zinc-300 hover:bg-zinc-900/60 hover:text-zinc-100"
+                >
+                  Back to email and password
+                </Button>
+              </form>
+            )}
 
-            {error ? <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
+            {error || oauthErrorMessage ? (
+              <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                {error || oauthErrorMessage}
+              </p>
+            ) : null}
             {notice ? <p className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{notice}</p> : null}
 
             <p className="text-sm text-zinc-400">

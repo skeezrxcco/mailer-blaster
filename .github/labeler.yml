@@ -1,0 +1,95 @@
+"area:auth":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/login/**"
+          - "app/signup/**"
+          - "app/api/auth/**"
+          - "lib/auth*.ts"
+          - "proxy.ts"
+
+"area:chat":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/chat/**"
+          - "lib/ai*.ts"
+          - "app/api/ai/**"
+
+"area:templates":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/templates/**"
+          - "components/shared/newsletter/**"
+
+"area:contacts":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/contacts/**"
+
+"area:campaigns":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/campaigns/**"
+          - "app/activity/**"
+          - "lib/jobs.ts"
+          - "lib/messaging.ts"
+          - "app/api/jobs/**"
+
+"area:billing":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/pricing/**"
+          - "app/checkout/**"
+
+"area:infra":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "Dockerfile*"
+          - "docker-compose*.yml"
+          - "Makefile"
+          - ".github/workflows/**"
+
+"area:data":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "prisma/**"
+          - "lib/prisma.ts"
+          - "**/*.data.ts"
+
+"area:ui":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/**"
+          - "components/**"
+          - "styles/**"
+
+"pipeline:ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/checks.yml"
+
+"pipeline:deploy":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/deploy-main.yml"
+          - ".github/workflows/release-tag.yml"
+
+"pipeline:docker":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "Dockerfile*"
+          - "docker-compose*.yml"
+
+"quality:test":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.test.ts"
+          - "**/*.test.tsx"
+          - "**/*.spec.ts"
+          - "**/*.spec.tsx"
+
+"type:docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "README.md"
+          - "CHANGELOG.md"

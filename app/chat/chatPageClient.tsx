@@ -1309,8 +1309,8 @@ export function ChatPageClient() {
   const [composerMode, setComposerMode] = useState<"prompt" | "emails">("prompt")
   const [emailEntries, setEmailEntries] = useState<EmailEntry[]>([])
   const [isCsvProcessing, setIsCsvProcessing] = useState(false)
-  const [isGeneratingTemplates, setIsGeneratingTemplates] = useState(false)
-  const generateTimeoutRef = useRef<number | null>(null)
+  const [isAiResponding, setIsAiResponding] = useState(false)
+  const [conversationId, setConversationId] = useState<string | null>(null)
 
   const resizeTextarea = () => {
     const element = textareaRef.current
@@ -1347,13 +1347,7 @@ export function ChatPageClient() {
       top: containerRef.current.scrollHeight,
       behavior: "smooth",
     })
-  }, [messages, isGeneratingTemplates, isCsvProcessing, emailEntries.length])
-
-  useEffect(() => {
-    return () => {
-      if (generateTimeoutRef.current) window.clearTimeout(generateTimeoutRef.current)
-    }
-  }, [])
+  }, [messages, isAiResponding, isCsvProcessing, emailEntries.length])
 
   useEffect(() => {
     if (initializedFromTemplateRef.current) return
@@ -1370,9 +1364,10 @@ export function ChatPageClient() {
     ])
   }, [searchParams])
 
-  const sendPrompt = () => {
+  const sendPrompt = async () => {
     const value = prompt.trim()
     if (!value) return
+    if (isAiResponding) return
 
     if (composerMode === "emails") {
       const parsed = parseEmailEntries(value)
@@ -1395,23 +1390,71 @@ export function ChatPageClient() {
       return
     }
 
-    setMessages((prev) => [...prev, { id: Date.now(), role: "user", text: value }])
-    setIsGeneratingTemplates(true)
-    generateTimeoutRef.current = window.setTimeout(() => {
+    const userMessage: Message = { id: Date.now(), role: "user", text: value }
+    setMessages((prev) => [...prev, userMessage])
+    setPrompt("")
+
+    setIsAiResponding(true)
+    try {
+      const response = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: value,
+          conversationId: conversationId ?? undefined,
+        }),
+      })
+
+      const payload = (await response.json()) as {
+        text?: string
+        error?: string
+        conversationId?: string
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "AI request failed")
+      }
+
+      if (payload.conversationId) {
+        setConversationId(payload.conversationId)
+      }
+
+      setMessages((prev) => {
+        const next: Message[] = [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "bot",
+            text: String(payload.text ?? "Done."),
+          },
+        ]
+
+        if (!selectedTemplate && !prev.some((entry) => entry.kind === "suggestions")) {
+          next.push({
+            id: Date.now() + 2,
+            role: "bot",
+            text: chatCopy.suggestionsIntro,
+            kind: "suggestions",
+          })
+        }
+
+        return next
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not generate an AI response."
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
           role: "bot",
-          text: chatCopy.suggestionsIntro,
-          kind: "suggestions",
+          text: `AI error: ${message}`,
         },
       ])
-      setIsGeneratingTemplates(false)
-      generateTimeoutRef.current = null
-    }, 900)
-
-    setPrompt("")
+    } finally {
+      setIsAiResponding(false)
+    }
   }
 
   const appendEmailEntries = (incoming: EmailEntry[], prefix: string) => {
@@ -1623,7 +1666,7 @@ export function ChatPageClient() {
           ))}
 
           {isCsvProcessing ? <CsvSheetSkeleton /> : null}
-          {isGeneratingTemplates ? <ActivityBubble label="Generating templates" /> : null}
+          {isAiResponding ? <ActivityBubble label="AI is thinking" /> : null}
         </div>
 
         <div className="p-3 pt-0 md:p-4 md:pt-0">

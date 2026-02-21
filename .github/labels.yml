@@ -1,0 +1,73 @@
+- name: type:feature
+  color: "1D76DB"
+  description: New feature work
+- name: type:fix
+  color: "D73A4A"
+  description: Bug fix
+- name: type:refactor
+  color: "6F42C1"
+  description: Internal refactor without behavior changes
+- name: type:chore
+  color: "8A8A8A"
+  description: Maintenance or tooling updates
+- name: type:docs
+  color: "0E8A16"
+  description: Documentation updates
+
+- name: area:auth
+  color: "FBCA04"
+  description: Authentication and session flow
+- name: area:chat
+  color: "F9D0C4"
+  description: Chat and AI orchestration
+- name: area:templates
+  color: "BFDADC"
+  description: Template marketplace/editor/preview
+- name: area:contacts
+  color: "C5DEF5"
+  description: Contacts and CSV import
+- name: area:campaigns
+  color: "FEF2C0"
+  description: Campaigns and activity tracking
+- name: area:billing
+  color: "5319E7"
+  description: Pricing, checkout, and entitlements
+- name: area:infra
+  color: "0052CC"
+  description: Infra, Docker, deploy, and runtime ops
+- name: area:data
+  color: "C2E0C6"
+  description: Prisma schema, migrations, and persistence
+- name: area:ui
+  color: "E99695"
+  description: UI, responsive behavior, and component updates
+
+- name: pipeline:ci
+  color: "0366D6"
+  description: CI pipeline behavior or checks workflow
+- name: pipeline:deploy
+  color: "0B7285"
+  description: Deployment workflow and release pipeline
+- name: pipeline:docker
+  color: "0DB7ED"
+  description: Docker services, compose, and container lifecycle
+
+- name: quality:test
+  color: "B60205"
+  description: Adds or updates tests
+- name: quality:coverage
+  color: "E11D21"
+  description: Coverage improvements or thresholds
+- name: quality:performance
+  color: "C2E812"
+  description: Performance or optimization changes
+
+- name: release:ready
+  color: "0E8A16"
+  description: Ready to include in release branch
+- name: release:blocked
+  color: "B60205"
+  description: Blocked from release until resolved
+- name: release:hotfix
+  color: "D93F0B"
+  description: Hotfix intended for main

@@ -35,7 +35,7 @@ jobs:
         run: |
           short_sha="${GITHUB_SHA::7}"
           image_tag="sha-${short_sha}"
-          image_ref="skeezrxcco/mailerblaster:${image_tag}"
+          image_ref="skeezrxcco/blastermailer:${image_tag}"
           echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
@@ -55,7 +55,7 @@ jobs:
           file: Dockerfile.prod
           push: true
           tags: |
-            skeezrxcco/mailerblaster:latest
+            skeezrxcco/blastermailer:latest
             ${{ steps.vars.outputs.image_ref }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -231,15 +231,15 @@ jobs:
 
       - name: Upload compose and env to VPS
         run: |
-          ssh "$VPS_USER@$VPS_HOST" "mkdir -p /opt/mailerblaster"
-          scp docker-compose.prod.yml "$VPS_USER@$VPS_HOST:/opt/mailerblaster/docker-compose.prod.yml"
-          scp .env.production "$VPS_USER@$VPS_HOST:/opt/mailerblaster/.env.production"
+          ssh "$VPS_USER@$VPS_HOST" "mkdir -p /opt/blastermailer"
+          scp docker-compose.prod.yml "$VPS_USER@$VPS_HOST:/opt/blastermailer/docker-compose.prod.yml"
+          scp .env.production "$VPS_USER@$VPS_HOST:/opt/blastermailer/.env.production"
 
       - name: Deploy containers on VPS
         run: |
           ssh "$VPS_USER@$VPS_HOST" "
             set -e
-            cd /opt/mailerblaster
+            cd /opt/blastermailer
             echo '$DOCKERHUB_TOKEN' | docker login -u '$DOCKERHUB_USERNAME' --password-stdin
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d db redis nats
