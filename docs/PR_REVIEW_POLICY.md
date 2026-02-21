@@ -4,6 +4,14 @@
 
 This policy applies to all pull requests targeting `dev`, `release/*`, and `main`.
 
+## Main Branch Source Rule
+
+- PRs to `main` are only allowed from:
+  - `release/*`
+  - `hotfix/*`
+- PRs to `main` from any other branch are auto-closed by:
+  - `.github/workflows/guard-main-pr-source.yml`
+
 ## Required Review Rules
 
 - At least 1 approval before merge.

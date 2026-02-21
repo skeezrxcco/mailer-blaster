@@ -126,6 +126,7 @@ GitHub Actions workflows are configured as:
 - `release-tag.yml`: runs on pushed version tags (`v*`) and publishes a GitHub release with changelog-driven notes.
 - `pr-labeler.yml`: applies path-based labels to PRs.
 - `labels-sync.yml`: syncs repository labels from `.github/labels.yml`.
+- `guard-main-pr-source.yml`: auto-closes PRs to `main` unless source branch is `release/*` or `hotfix/*`.
 
 Required GitHub repository secrets for deployment:
 

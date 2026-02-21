@@ -1,0 +1,73 @@
+name: Guard Main PR Source
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  validate-source-branch:
+    name: Block non-release PRs to main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR source branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const head = pr.head.ref;
+            const isAllowed = head.startsWith("release/") || head.startsWith("hotfix/");
+
+            if (isAllowed) {
+              core.info(`Allowed PR source branch for main: ${head}`);
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = pr.number;
+            const body = [
+              "This PR was automatically closed.",
+              "",
+              `PRs into \`main\` are only allowed from \`release/*\` or \`hotfix/*\`.`,
+              `Current source branch: \`${head}\``,
+              "",
+              "Use the release flow:",
+              "1. Merge work into `dev`.",
+              "2. Cherry-pick into `release/vX.Y.Z`.",
+              "3. Open PR `release/vX.Y.Z -> main`."
+            ].join("\n");
+
+            try {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number,
+                labels: ["release:blocked"]
+              });
+            } catch (error) {
+              core.warning(`Failed to add label: ${error.message}`);
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body
+            });
+
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number: issue_number,
+              state: "closed"
+            });
