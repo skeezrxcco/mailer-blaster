@@ -3,20 +3,28 @@
 ## Branch Strategy
 
 - Development integration branch: `dev`
-- Release branches: `release/*`
+- Release branches: `release/vX.Y.Z` (recommended)
 - Production branch: `main`
 
 ## Standard Flow
 
 1. Merge work branches into `dev`.
-2. Cherry-pick selected commits from `dev` to `release/<version>`.
+2. Cherry-pick selected commits from `dev` to `release/v<version>`.
 3. Update `CHANGELOG.md` for each cherry-pick to release.
-4. Merge `release/<version>` into `main`.
+4. Merge `release/v<version>` into `main`.
 5. Merge `main` back into `dev`.
 
 ## Tag and Publish
 
-After `release/<version>` is merged to `main`:
+### Automatic (recommended)
+
+If merge commit message contains `release/vX.Y.Z`, workflow
+`.github/workflows/auto-tag-release-merge.yml` creates and pushes `vX.Y.Z`.
+Then `.github/workflows/release-tag.yml` publishes the GitHub Release.
+
+### Manual fallback
+
+Use this when release branch naming is not semver:
 
 1. Create annotated tag:
    - `git tag -a v1.0.0 -m "Release v1.0.0"`

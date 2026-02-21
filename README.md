@@ -122,6 +122,7 @@ GitHub Actions workflows are configured as:
   - `npm run test --if-present`
   - `npm run build`
 - `deploy-main.yml`: runs on pushes to `main`, then builds and pushes a production image to Docker Hub, deploys to VPS via SSH, runs `npm run db:push`, and updates app containers.
+- `auto-tag-release-merge.yml`: on push to `main`, auto-tags when commit message references `release/vX.Y.Z`.
 - `release-tag.yml`: runs on pushed version tags (`v*`) and publishes a GitHub release with changelog-driven notes.
 - `pr-labeler.yml`: applies path-based labels to PRs.
 - `labels-sync.yml`: syncs repository labels from `.github/labels.yml`.
