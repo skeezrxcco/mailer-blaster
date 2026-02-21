@@ -167,7 +167,7 @@ if (process.env.AUTH_EMAIL_FROM && (process.env.SMTP_HOST || process.env.RESEND_
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
   },
@@ -232,11 +232,86 @@ export const authOptions: NextAuthOptions = {
 
       return true
     },
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id
-        session.user.plan = user.plan ?? "starter"
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+        token.plan = user.plan ?? (typeof token.plan === "string" ? token.plan : "starter")
+        token.role = user.role ?? (typeof token.role === "string" ? token.role : "user")
+        token.sessionVersion = typeof user.sessionVersion === "number" ? user.sessionVersion : 1
+        return token
       }
+
+      const tokenUserId = typeof token.id === "string" ? token.id : ""
+
+      if (!tokenUserId) {
+        const tokenEmail = typeof token.email === "string" ? token.email.trim().toLowerCase() : ""
+        if (!tokenEmail) return token
+
+        const userByEmail = await prisma.user.findUnique({
+          where: { email: tokenEmail },
+          select: {
+            id: true,
+            plan: true,
+            role: true,
+            sessionVersion: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        })
+
+        if (!userByEmail) return {}
+
+        token.id = userByEmail.id
+        token.plan = userByEmail.plan
+        token.role = userByEmail.role
+        token.sessionVersion = userByEmail.sessionVersion
+        token.name = userByEmail.name ?? token.name
+        token.email = userByEmail.email ?? token.email
+        token.picture = userByEmail.image ?? token.picture
+        return token
+      }
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: tokenUserId },
+        select: {
+          plan: true,
+          role: true,
+          sessionVersion: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      })
+
+      if (!dbUser) return {}
+
+      const tokenVersion = typeof token.sessionVersion === "number" ? token.sessionVersion : 1
+      if (dbUser.sessionVersion > tokenVersion) {
+        return {}
+      }
+
+      token.plan = dbUser.plan
+      token.role = dbUser.role
+      token.sessionVersion = dbUser.sessionVersion
+      token.name = dbUser.name ?? token.name
+      token.email = dbUser.email ?? token.email
+      token.picture = dbUser.image ?? token.picture
+
+      return token
+    },
+    async session({ session, token }) {
+      if (!session.user) return session
+
+      const tokenId = typeof token.id === "string" ? token.id : ""
+      if (tokenId) session.user.id = tokenId
+
+      session.user.plan = typeof token.plan === "string" ? token.plan : session.user.plan ?? "starter"
+      if (typeof token.role === "string") session.user.role = token.role
+      if (!session.user.email && typeof token.email === "string") session.user.email = token.email
+      if (!session.user.name && typeof token.name === "string") session.user.name = token.name
+      if (!session.user.image && typeof token.picture === "string") session.user.image = token.picture
+
       return session
     },
   },

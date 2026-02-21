@@ -22,6 +22,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Input } from "@/components/ui/input"
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
 import { type CheckoutItem, useCheckoutItem } from "@/hooks/use-checkout-item"
+import { type SessionUserSummary } from "@/types/session-user"
 
 function SettingsUsageCharts() {
   return (
@@ -126,7 +127,7 @@ function SettingsUsageCharts() {
   )
 }
 
-export function SettingsPageClient() {
+export function SettingsPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const settingsSection = settingsSectionFromParam(searchParams.get("section"))
@@ -136,19 +137,18 @@ export function SettingsPageClient() {
   const [smtpPort, setSmtpPort] = useState("587")
   const [smtpUser, setSmtpUser] = useState("")
   const [smtpFrom, setSmtpFrom] = useState("")
-
   const goToCheckout = (item: CheckoutItem) => {
     setCheckoutItem(item)
     router.push("/checkout")
   }
 
   return (
-    <WorkspaceShell tab="settings" pageTitle="Settings">
+    <WorkspaceShell tab="settings" pageTitle="Settings" user={initialUser}>
       <div data-workspace-scroll className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
         <div className="relative mb-5 overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top_left,#1d4ed8_0%,#111827_42%,#020617_100%)] px-5 py-5 sm:px-6">
           <p className="text-xs uppercase tracking-[0.16em] text-sky-200/85">Account control center</p>
           <p className="mt-1 text-sm text-zinc-200/90">Manage profile, plan, usage, referrals, pricing, and checkout from the sidebar.</p>
-          <div className="mt-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs text-zinc-100">Workspace admin: ricardo@example.com</div>
+          <div className="mt-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs text-zinc-100">Workspace admin: {initialUser.email}</div>
         </div>
 
         {settingsSection === "profile" ? (
@@ -159,8 +159,8 @@ export function SettingsPageClient() {
                 <CardDescription>Identity and brand defaults.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Input value={profileData.name} readOnly className="h-10 border-zinc-800/70 bg-zinc-900/80 text-zinc-100" />
-                <Input value={profileData.email} readOnly className="h-10 border-zinc-800/70 bg-zinc-900/80 text-zinc-100" />
+                <Input value={initialUser.name} readOnly className="h-10 border-zinc-800/70 bg-zinc-900/80 text-zinc-100" />
+                <Input value={initialUser.email} readOnly className="h-10 border-zinc-800/70 bg-zinc-900/80 text-zinc-100" />
                 <Input value={profileData.timezone} readOnly className="h-10 border-zinc-800/70 bg-zinc-900/80 text-zinc-100" />
               </CardContent>
             </Card>

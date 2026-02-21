@@ -24,11 +24,31 @@ if (!global.__authRateBuckets) {
   global.__authRateBuckets = buckets
 }
 
+function isTruthy(value: string | undefined) {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on"
+}
+
+export function isAuthRateLimitDisabled() {
+  const disabledEverywhere = isTruthy(process.env.AUTH_RATE_LIMIT_DISABLED)
+  const disabledInDev = process.env.NODE_ENV !== "production" && isTruthy(process.env.AUTH_RATE_LIMIT_DISABLE_IN_DEV ?? "true")
+  return disabledEverywhere || disabledInDev
+}
+
 function prune(bucket: Bucket, windowMs: number, now: number) {
   bucket.timestamps = bucket.timestamps.filter((timestamp) => now - timestamp < windowMs)
 }
 
 export function checkRateLimit(input: LimitInput): LimitResult {
+  if (isAuthRateLimitDisabled()) {
+    return {
+      allowed: true,
+      remaining: input.limit,
+      retryAfterSeconds: 0,
+    }
+  }
+
   const now = Date.now()
   const windowMs = input.windowSeconds * 1000
   const bucket = buckets.get(input.key) ?? { timestamps: [] }

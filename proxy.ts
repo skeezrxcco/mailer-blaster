@@ -1,22 +1,6 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
-const protectedPrefixes = ["/chat", "/templates", "/contacts", "/activity", "/campaigns", "/settings", "/pricing", "/checkout"]
-const authPages = ["/login", "/signup", "/reset-password"]
-
-function isProtectedPath(pathname: string) {
-  return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
-}
-
-function hasSessionCookie(request: NextRequest) {
-  return Boolean(
-    request.cookies.get("session-token")?.value ||
-      request.cookies.get("__Secure-session-token")?.value ||
-      request.cookies.get("next-auth.session-token")?.value ||
-      request.cookies.get("__Secure-next-auth.session-token")?.value,
-  )
-}
-
 function isWaitlistModeEnabled() {
   const fallback = process.env.NODE_ENV === "production" ? "true" : "false"
   const raw = (process.env.WAITLIST_MODE ?? fallback).trim().toLowerCase()
@@ -39,22 +23,6 @@ export function proxy(request: NextRequest) {
   if (isWaitlistModeEnabled() && !shouldBypassWaitlist(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = "/"
-    url.search = ""
-    return NextResponse.redirect(url)
-  }
-
-  const isAuthenticated = hasSessionCookie(request)
-
-  if (!isAuthenticated && isProtectedPath(pathname)) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/login"
-    url.searchParams.set("next", pathname)
-    return NextResponse.redirect(url)
-  }
-
-  if (isAuthenticated && authPages.includes(pathname)) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/chat"
     url.search = ""
     return NextResponse.redirect(url)
   }

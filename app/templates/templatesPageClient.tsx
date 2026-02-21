@@ -17,6 +17,7 @@ import {
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
 import { useCheckoutItem } from "@/hooks/use-checkout-item"
 import { useMyTemplates } from "@/hooks/use-my-templates"
+import { type SessionUserSummary } from "@/types/session-user"
 import { cn } from "@/lib/utils"
 
 type PreviewMode = "desktop" | "tablet" | "mobile"
@@ -874,7 +875,7 @@ function TemplateLibraryCard({
   )
 }
 
-export function TemplatesPageClient() {
+export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
   const router = useRouter()
   const { setCheckoutItem } = useCheckoutItem()
   const { myTemplateIds, addTemplateId } = useMyTemplates()
@@ -974,7 +975,7 @@ export function TemplatesPageClient() {
   }
 
   return (
-    <WorkspaceShell tab="templates" pageTitle="Template library">
+    <WorkspaceShell tab="templates" pageTitle="Template library" user={initialUser}>
       <div data-workspace-scroll className="scrollbar-hide h-full min-h-0 overflow-y-auto p-4 md:p-6">
         <div className="mb-4 space-y-1">
           <h2 className="text-xl font-semibold text-zinc-100">Template library</h2>

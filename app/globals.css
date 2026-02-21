@@ -168,4 +168,34 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  @keyframes toast-progress-shrink {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
+  [data-sonner-toaster] [data-sonner-toast] {
+    position: relative;
+    overflow: hidden;
+  }
+
+  [data-sonner-toaster] [data-sonner-toast]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    transform-origin: left center;
+    background: linear-gradient(90deg, oklch(0.76 0.08 230), oklch(0.72 0.1 180));
+    animation: toast-progress-shrink 4s linear forwards;
+  }
+
+  [data-sonner-toaster] [data-sonner-toast][data-type="error"]::after {
+    background: linear-gradient(90deg, oklch(0.7 0.15 25), oklch(0.62 0.14 15));
+  }
 }

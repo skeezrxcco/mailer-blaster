@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import MeshGradient from "@/components/mesh-gradient"
 import { Analytics } from "@vercel/analytics/react"
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import { Toaster } from "sonner"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <MeshGradient />
         {children}
+        <Toaster position="bottom-left" theme="dark" richColors closeButton={false} duration={4000} />
         <Analytics />
         <SpeedInsights />
       </body>

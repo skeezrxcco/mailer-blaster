@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { type SessionUserSummary } from "@/types/session-user"
 
 function looksLikeEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
@@ -47,7 +48,7 @@ function createContact(name: string, email: string, source: "import" | "manual")
   }
 }
 
-export function ContactsPageClient() {
+export function ContactsPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
   const csvInputRef = useRef<HTMLInputElement | null>(null)
 
   const [contacts, setContacts] = useState<ContactRecord[]>(initialContacts)
@@ -202,7 +203,7 @@ export function ContactsPageClient() {
   )
 
   return (
-    <WorkspaceShell tab="contacts" pageTitle={contactsPageCopy.title}>
+    <WorkspaceShell tab="contacts" pageTitle={contactsPageCopy.title} user={initialUser}>
       <div data-workspace-scroll className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
         <div className="mb-4">
           <h2 className="text-xl font-semibold text-zinc-100">{contactsPageCopy.title}</h2>

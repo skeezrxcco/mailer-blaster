@@ -49,13 +49,14 @@ async function sendWithResend(input: SendEmailInput): Promise<SendEmailResult> {
 }
 
 async function sendWithSmtp(input: SendEmailInput): Promise<SendEmailResult> {
-  const host = process.env.SMTP_HOST
-  const port = Number(process.env.SMTP_PORT || "587")
+  const isProduction = process.env.NODE_ENV === "production"
+  const host = process.env.SMTP_HOST || (!isProduction ? "127.0.0.1" : undefined)
+  const port = Number(process.env.SMTP_PORT || (!isProduction ? "1025" : "587"))
   const user = process.env.SMTP_USER
   const pass = process.env.SMTP_PASS
 
   if (!host) {
-    throw new Error("Missing SMTP_HOST")
+    throw new Error("Missing SMTP_HOST. Configure SMTP_HOST/SMTP_PORT or set RESEND_API_KEY.")
   }
 
   if ((user && !pass) || (!user && pass)) {

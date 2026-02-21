@@ -12,9 +12,10 @@ import { Switch } from "@/components/ui/switch"
 import { pricingAddOns, pricingPlans } from "@/app/pricing/pricing-page.data"
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
 import { type CheckoutItem, useCheckoutItem } from "@/hooks/use-checkout-item"
+import { type SessionUserSummary } from "@/types/session-user"
 import { cn } from "@/lib/utils"
 
-export function PricingPageClient() {
+export function PricingPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
   const router = useRouter()
   const { setCheckoutItem } = useCheckoutItem()
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly")
@@ -26,7 +27,7 @@ export function PricingPageClient() {
   }
 
   return (
-    <WorkspaceShell tab="pricing" pageTitle="Pricing">
+    <WorkspaceShell tab="pricing" pageTitle="Pricing" user={initialUser}>
       <div data-workspace-scroll className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
         <div className="relative mb-6 overflow-hidden rounded-[30px] bg-[radial-gradient(circle_at_top,#0f766e_0%,#111827_45%,#020617_100%)] px-5 py-7 text-center sm:px-8">
           <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/85">Simple, transparent pricing</p>

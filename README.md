@@ -36,7 +36,7 @@ This project includes a full Docker development environment with:
 Recommended dev workflow:
 
 - Run infra services in Docker.
-- Run the Next.js app locally (`npm run dev`) for faster HMR/debugging.
+- Run the Next.js app locally on `http://localhost:3000` for faster HMR/debugging and stable OAuth callbacks.
 
 Before first run:
 
@@ -62,6 +62,18 @@ make up-lite
 make dev
 ```
 
+### Bootstrap everything (infra + app + DB init + seed data)
+
+```bash
+make up-all
+```
+
+Alias:
+
+```bash
+make bootstrap
+```
+
 ### Stop
 
 ```bash
@@ -83,13 +95,10 @@ make logs
 - Mailpit SMTP: `localhost:1025`
 - Mailpit UI: `http://localhost:8025`
 
-### Optional: run app in Docker
+After `make up-all`, seeded local users are:
 
-```bash
-make app-up
-```
-
-Then app is available at `http://localhost:3000`.
+- `admin@blastermailer.local` / `ChangeMe123!`
+- `starter@blastermailer.local` / `ChangeMe123!`
 
 ### Optional: Stripe webhook testing in Docker
 
@@ -184,7 +193,7 @@ Required GitHub repository secrets for deployment:
 - `LLAMA_BASE_URL`
 - `LLAMA_API_KEY`
 - `LLAMA_MODEL`
-- `AUTH_CODE_TTL_MINUTES`
+- `AUTH_CODE_TTL_SECONDS`
 - `AUTH_CODE_RESEND_COOLDOWN_SECONDS`
 - `WAITLIST_MODE` (optional; defaults to `true`)
 - `STRIPE_SECRET_KEY` (optional)

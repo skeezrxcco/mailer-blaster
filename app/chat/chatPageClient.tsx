@@ -18,6 +18,7 @@ import { EyeIcon } from "@/components/ui/eye"
 import { TemplatePreview } from "@/components/shared/newsletter/template-preview"
 import { buildEditorData, templateOptions, type TemplateEditorData, type TemplateOption } from "@/components/shared/newsletter/template-data"
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
+import { type SessionUserSummary } from "@/types/session-user"
 import { cn } from "@/lib/utils"
 
 type ValidationStats = {
@@ -1288,7 +1289,7 @@ function TemplateEditorModal({
   )
 }
 
-export function ChatPageClient() {
+export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -1569,7 +1570,7 @@ export function ChatPageClient() {
   }
 
   return (
-    <WorkspaceShell tab="chat" pageTitle="Chat">
+    <WorkspaceShell tab="chat" pageTitle="Chat" user={initialUser}>
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
         <div data-workspace-scroll className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5 md:px-6 md:py-6" ref={containerRef}>
           {messages.map((message) => (

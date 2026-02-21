@@ -1,34 +1,6 @@
 name: blastermailer
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: blastermailer-app
-    profiles: ["app"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      nats:
-        condition: service_started
-      mailpit:
-        condition: service_started
-    env_file:
-      - .env.docker
-    environment:
-      WATCHPACK_POLLING: "true"
-      CHOKIDAR_USEPOLLING: "true"
-    ports:
-      - "3000:3000"
-    volumes:
-      - .:/app
-      - app_node_modules:/app/node_modules
-      - app_next:/app/.next
-    restart: unless-stopped
-
   db:
     image: pgvector/pgvector:pg16
     container_name: blastermailer-db
@@ -100,5 +72,3 @@ volumes:
   postgres_data:
   redis_data:
   nats_data:
-  app_node_modules:
-  app_next:

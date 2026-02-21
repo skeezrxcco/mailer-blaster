@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server"
-import { Prisma } from "@prisma/client"
 
 import { buildRateLimitKey, checkRateLimit } from "@/lib/auth-rate-limit"
 import { recordAuthEvent } from "@/lib/auth-security"
-import { createAndSendAuthCode } from "@/lib/auth-code"
 import { ensureDevAuthSchema } from "@/lib/auth-schema-bootstrap"
-import { hashPassword } from "@/lib/password"
+import { requestPendingSignupCode } from "@/lib/pending-signup"
 import { prisma } from "@/lib/prisma"
 import { extractClientIp, extractUserAgent } from "@/lib/request-context"
 
@@ -80,38 +78,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Password must have at least 8 characters" }, { status: 422 })
     }
 
-    const passwordHash = await hashPassword(password)
-
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        passwordHash,
-        emailVerified: null,
-      },
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
       select: {
         id: true,
-        name: true,
-        email: true,
-        plan: true,
+        passwordHash: true,
       },
     })
 
-    const codeResult = await createAndSendAuthCode({
-      userId: user.id,
-      email,
-      purpose: "login",
-    })
-
-    return NextResponse.json({
-      user,
-      codeSent: codeResult.sent,
-      expiresAt: codeResult.sent ? codeResult.expiresAt.toISOString() : null,
-    })
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    if (existingUser?.passwordHash) {
       return NextResponse.json({ error: "Email already registered" }, { status: 409 })
     }
+
+    const codeResult = await requestPendingSignupCode({
+      name,
+      email,
+      password,
+    })
+
+    if (!codeResult.sent) {
+      return NextResponse.json(
+        { error: `Please wait ${codeResult.waitSeconds}s before requesting another code.` },
+        { status: 429 },
+      )
+    }
+
+    return NextResponse.json({
+      codeSent: true,
+      expiresAt: codeResult.expiresAt.toISOString(),
+    })
+  } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to create account"
     return NextResponse.json({ error: message }, { status: 500 })
   }

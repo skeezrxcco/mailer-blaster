@@ -15,13 +15,50 @@ type AuthEventInput = {
 const SUSPICIOUS_EVENT_WINDOW_MINUTES = 15
 const SUSPICIOUS_EVENT_THRESHOLD = 5
 
-function isMissingTableError(error: unknown) {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021"
+function isSchemaNotReadyError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2021" || error.code === "P2022")
+  )
+}
+
+type AuthSecurityEventDelegate = {
+  create: (args: {
+    data: {
+      type: string
+      severity: string
+      userId: string | null
+      email: string | null
+      ipAddress: string | null
+      userAgent: string | null
+      metadata?: Prisma.InputJsonValue
+    }
+  }) => Promise<unknown>
+  count: (args: {
+    where: {
+      userId: string
+      severity: string
+      type: string
+      createdAt: {
+        gte: Date
+      }
+    }
+  }) => Promise<number>
+}
+
+function getAuthSecurityEventDelegate(): AuthSecurityEventDelegate | null {
+  const delegate = (prisma as unknown as { authSecurityEvent?: AuthSecurityEventDelegate }).authSecurityEvent
+  if (!delegate || typeof delegate.create !== "function" || typeof delegate.count !== "function") {
+    return null
+  }
+  return delegate
 }
 
 export async function recordAuthEvent(input: AuthEventInput) {
+  const delegate = getAuthSecurityEventDelegate()
+  if (!delegate) return
+
   try {
-    await prisma.authSecurityEvent.create({
+    await delegate.create({
       data: {
         type: input.type,
         severity: input.severity ?? "info",
@@ -33,7 +70,7 @@ export async function recordAuthEvent(input: AuthEventInput) {
       },
     })
   } catch (error) {
-    if (isMissingTableError(error)) return
+    if (isSchemaNotReadyError(error)) return
     throw error
   }
 }
@@ -55,7 +92,7 @@ export async function invalidateUserSessions(userId: string, reason: string) {
       }),
     ])
   } catch (error) {
-    if (!isMissingTableError(error)) {
+    if (!isSchemaNotReadyError(error)) {
       throw error
     }
   }
@@ -86,11 +123,13 @@ export async function registerAuthFailureAndInvalidateIfNeeded(input: {
   })
 
   if (!input.userId) return
+  const delegate = getAuthSecurityEventDelegate()
+  if (!delegate) return
 
   const thresholdWindow = new Date(Date.now() - SUSPICIOUS_EVENT_WINDOW_MINUTES * 60 * 1000)
 
   try {
-    const recentFailures = await prisma.authSecurityEvent.count({
+    const recentFailures = await delegate.count({
       where: {
         userId: input.userId,
         severity: "warn",
@@ -105,7 +144,7 @@ export async function registerAuthFailureAndInvalidateIfNeeded(input: {
       await invalidateUserSessions(input.userId, "suspicious-auth-failures")
     }
   } catch (error) {
-    if (isMissingTableError(error)) return
+    if (isSchemaNotReadyError(error)) return
     throw error
   }
 }
