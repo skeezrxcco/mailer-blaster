@@ -63,7 +63,7 @@ async function processSendEmailJob(job: Job) {
     data: {
       userId: job.userId,
       toEmail: to,
-      fromEmail: from ?? process.env.EMAIL_FROM ?? process.env.AUTH_EMAIL_FROM ?? "no-reply@mailerblaster.ai",
+      fromEmail: from ?? process.env.EMAIL_FROM ?? process.env.AUTH_EMAIL_FROM ?? "no-reply@blastermailer.ai",
       subject,
       htmlBody: html,
       textBody: text,

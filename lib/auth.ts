@@ -89,8 +89,8 @@ if (process.env.AUTH_EMAIL_FROM && (process.env.SMTP_HOST || process.env.RESEND_
           to: identifier,
           from: provider.from,
           subject: "Your sign-in link",
-          html: `<p>Sign in to mailerblaster:</p><p><a href="${url}">${url}</a></p>`,
-          text: `Sign in to mailerblaster: ${url}`,
+          html: `<p>Sign in to blastermailer:</p><p><a href="${url}">${url}</a></p>`,
+          text: `Sign in to blastermailer: ${url}`,
         })
       },
     }),

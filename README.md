@@ -1,5 +1,21 @@
 # blastermailer
 
+## Release workflow
+
+- Branching/versioning guide: `/docs/VERSIONING.md`
+- Release notes: `/CHANGELOG.md`
+
+## Auth setup
+
+- OAuth + email code setup: `/docs/AUTH_SETUP.md`
+
+## GitHub shortcuts
+
+- Shortcut file: `/scripts/blastermailer-gh-shortcuts.zsh`
+- Load it in your shell:
+  - `source ./scripts/blastermailer-gh-shortcuts.zsh`
+- Optional: add that `source` line to `~/.zshrc`.
+
 ## Docker dev stack
 
 This project includes a full Docker development environment with:

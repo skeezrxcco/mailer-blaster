@@ -135,7 +135,7 @@ export default function SignupPage() {
       <div className="grid w-full max-w-5xl overflow-hidden rounded-[32px] bg-zinc-950/70 shadow-[0_32px_90px_rgba(0,0,0,0.45)] md:grid-cols-2">
         <section className="hidden flex-col justify-between bg-[radial-gradient(circle_at_top_left,#14532d_0%,#111827_58%,#020617_100%)] p-8 md:flex">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/85">mailerblaster AI</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/85">blastermailer AI</p>
             <h1 className="mt-4 text-3xl font-semibold text-zinc-100">Create your workspace and launch campaigns in minutes.</h1>
             <p className="mt-3 text-sm leading-relaxed text-zinc-300">
               Professional templates, audience management, and campaign analytics in one streamlined platform.

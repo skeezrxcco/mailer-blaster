@@ -40,8 +40,8 @@ export const profileData = {
   name: "Ricardo Pires",
   email: "ricardo@example.com",
   timezone: "Europe/Lisbon",
-  senderName: "mailerblaster AI",
-  replyTo: "hello@mailerblaster.ai",
+  senderName: "blastermailer AI",
+  replyTo: "hello@blastermailer.ai",
   locale: "en-US",
   style: "professional",
 }
@@ -54,7 +54,7 @@ export const currentPlanFacts = [
 ]
 
 export const referralsData = {
-  link: "https://mailerblaster.ai/r/ref-rp-2026",
+  link: "https://blastermailer.ai/r/ref-rp-2026",
   rewardText: "Current reward: 50 credits per converted referral.",
   quarterStatsText: "Referrals this quarter: 4 successful",
 }

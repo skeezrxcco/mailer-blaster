@@ -4,10 +4,12 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+name: blastermailer
+
 services:
   app:
-    image: ${DOCKERHUB_IMAGE:-skeezrxcco/mailerblaster:latest}
-    container_name: mailerblaster-app
+    image: ${DOCKERHUB_IMAGE:-skeezrxcco/blastermailer:latest}
+    container_name: blastermailer-app
     restart: unless-stopped
     logging: *default-logging
     env_file:
@@ -24,7 +26,7 @@ services:
 
   db:
     image: pgvector/pgvector:pg16
-    container_name: mailerblaster-db
+    container_name: blastermailer-db
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -41,7 +43,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: mailerblaster-redis
+    container_name: blastermailer-redis
     restart: unless-stopped
     logging: *default-logging
     command: ["redis-server", "--appendonly", "yes"]
@@ -55,7 +57,7 @@ services:
 
   nats:
     image: nats:2.10-alpine
-    container_name: mailerblaster-nats
+    container_name: blastermailer-nats
     restart: unless-stopped
     logging: *default-logging
     command: ["-js", "-sd", "/data", "-m", "8222"]
