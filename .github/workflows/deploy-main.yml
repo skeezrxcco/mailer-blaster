@@ -244,6 +244,18 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d db redis nats
             docker compose -f docker-compose.prod.yml --env-file .env.production run --rm app npm run db:push
+            # Remove stale app containers that can block host port 3000 on redeploy.
+            for cid in \$(docker ps -q --filter publish=3000); do
+              cname=\$(docker inspect --format '{{.Name}}' \"\$cid\" | sed 's#^/##')
+              if [ \"\$cname\" != \"blastermailer-app\" ]; then
+                echo \"Removing stale container using port 3000: \$cname\"
+                docker rm -f \"\$cid\"
+              fi
+            done
+            if ss -ltn '( sport = :3000 )' | tail -n +2 | grep -q .; then
+              echo 'Port 3000 is still in use by a non-container process. Refusing to continue.'
+              exit 1
+            fi
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans app
             docker compose -f docker-compose.prod.yml --env-file .env.production ps
           "
