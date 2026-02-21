@@ -14,7 +14,7 @@ All notable changes to this project are documented in this file.
 
 ## [mvp-1-0]
 
-Release branch: `codex/release/mvp-1-0`
+Release branch: `release/mvp-1-0`
 
 ### Added
 
@@ -22,4 +22,4 @@ Release branch: `codex/release/mvp-1-0`
 
 ### Notes
 
-- Update this section at every cherry-pick into `codex/release/mvp-1-0`.
+- Update this section at every cherry-pick into `release/mvp-1-0`.

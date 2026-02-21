@@ -10,7 +10,7 @@ Last updated: 2026-02-20
 - [x] Add CI workflow for checks on every branch push
 - [x] Add deployment workflow for production deploy on `main`
 - [ ] Add branch protection rules requiring checks before merge to `main`
-- [ ] Add CODEOWNERS and PR review policy
+- [x] Add CODEOWNERS and PR review policy
 
 ## 1) Product and UX Scope
 

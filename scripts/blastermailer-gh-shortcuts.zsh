@@ -48,7 +48,7 @@ bm_gh_auth() {
 }
 
 bm_pr() {
-  local base="${1:-codex/dev}"
+  local base="${1:-dev}"
   local title="${2:-$(git rev-parse --abbrev-ref HEAD)}"
   local body="${3:-}"
 
@@ -85,7 +85,7 @@ bm_pr_master() {
 }
 
 bm_pr_dev() {
-  bm_pr "codex/dev" "${1:-dev: $(git rev-parse --abbrev-ref HEAD)}" "${2:-}"
+  bm_pr "dev" "${1:-dev: $(git rev-parse --abbrev-ref HEAD)}" "${2:-}"
 }
 
 bm_merge_pr() {
@@ -131,8 +131,8 @@ bm_cherrypick_to_release() {
 
   local base_ref
   base_ref="$(gh pr view "$pr" --json baseRefName --jq '.baseRefName')" || return 1
-  if [ "$base_ref" != "codex/dev" ]; then
-    echo "PR base is $base_ref, expected codex/dev."
+  if [ "$base_ref" != "dev" ]; then
+    echo "PR base is $base_ref, expected dev."
     return 1
   fi
 
@@ -171,7 +171,7 @@ bm_merge_dev_and_cherrypick() {
 bm_promote_release() {
   local release_branch="$1"
   local main_branch="${2:-main}"
-  local dev_branch="${3:-codex/dev}"
+  local dev_branch="${3:-dev}"
 
   if [ -z "$release_branch" ]; then
     echo "Usage: bm_promote_release <release_branch> [main_branch] [dev_branch]"
@@ -199,7 +199,7 @@ bm_promote_release() {
 }
 
 bm_promote_release_master() {
-  bm_promote_release "$1" "main" "codex/dev"
+  bm_promote_release "$1" "main" "dev"
 }
 
 bm_pr_checks() {

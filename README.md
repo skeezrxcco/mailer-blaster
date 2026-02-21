@@ -1,9 +1,16 @@
 # blastermailer
 
+[![Checks](https://github.com/skeezrxcco/blastermailer/actions/workflows/checks.yml/badge.svg)](https://github.com/skeezrxcco/blastermailer/actions/workflows/checks.yml)
+[![Deploy](https://github.com/skeezrxcco/blastermailer/actions/workflows/deploy-main.yml/badge.svg)](https://github.com/skeezrxcco/blastermailer/actions/workflows/deploy-main.yml)
+[![Release On Tag](https://github.com/skeezrxcco/blastermailer/actions/workflows/release-tag.yml/badge.svg)](https://github.com/skeezrxcco/blastermailer/actions/workflows/release-tag.yml)
+
 ## Release workflow
 
 - Branching/versioning guide: `/docs/VERSIONING.md`
 - Release notes: `/CHANGELOG.md`
+- Release runbook: `/docs/RELEASE_PROCESS.md`
+- PR review policy: `/docs/PR_REVIEW_POLICY.md`
+- Quality/pipeline/release tags: `/docs/QUALITY_TAGS.md`
 
 ## Auth setup
 
@@ -115,6 +122,9 @@ GitHub Actions workflows are configured as:
   - `npm run test --if-present`
   - `npm run build`
 - `deploy-main.yml`: runs on pushes to `main`, then builds and pushes a production image to Docker Hub, deploys to VPS via SSH, runs `npm run db:push`, and updates app containers.
+- `release-tag.yml`: runs on pushed version tags (`v*`) and publishes a GitHub release with changelog-driven notes.
+- `pr-labeler.yml`: applies path-based labels to PRs.
+- `labels-sync.yml`: syncs repository labels from `.github/labels.yml`.
 
 Required GitHub repository secrets for deployment:
 
