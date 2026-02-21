@@ -16,17 +16,20 @@ model User {
   passwordHash  String?
   plan          String    @default("starter")
   role          String    @default("user")
+  sessionVersion Int      @default(1)
+  passwordChangedAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
-  contacts  Contact[]
-  campaigns Campaign[]
-  jobs      Job[]
-  messages  Message[]
-  emails    EmailMessage[]
-  authCodes AuthCode[]
+  accounts       Account[]
+  sessions       Session[]
+  contacts       Contact[]
+  campaigns      Campaign[]
+  jobs           Job[]
+  messages       Message[]
+  emails         EmailMessage[]
+  authCodes      AuthCode[]
+  authEvents     AuthSecurityEvent[]
 }
 
 model Account {
@@ -166,6 +169,25 @@ model AuthCode {
 
   @@index([userId, purpose, createdAt])
   @@index([userId, purpose, codeHash])
+  @@index([expiresAt, consumedAt])
+}
+
+model AuthSecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  type      String
+  severity  String   @default("info")
+  email     String?
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+  @@index([type, createdAt])
 }
 
 model AiProviderDailyUsage {

@@ -39,7 +39,9 @@ import {
   type WorkspaceIconKey,
 } from "@/components/shared/workspace/workspace.data"
 import { useCheckoutItem } from "@/hooks/use-checkout-item"
+import { useSessionUser } from "@/hooks/use-session-user"
 import { tabRoutes, type SidebarTab } from "@/hooks/use-workspace-tab"
+import { type SessionUserSummary } from "@/types/session-user"
 import { cn } from "@/lib/utils"
 
 type AppIcon = ComponentType<{ className?: string; size?: number }>
@@ -114,12 +116,14 @@ function CreditsMeter({ credits, maxCredits }: { credits: number; maxCredits: nu
 }
 
 function UserMenu({
+  user,
   credits,
   maxCredits,
   sidebarExpanded,
   onNavigateSettingsSection,
   onSignOut,
 }: {
+  user: SessionUserSummary
   credits: number
   maxCredits: number
   sidebarExpanded: boolean
@@ -140,12 +144,12 @@ function UserMenu({
           aria-label="Open user menu"
         >
           <Avatar className="size-7 !rounded-full ring-2 ring-sky-400/25">
-            <AvatarImage src={workspaceStaticData.user.avatarUrl} alt="User avatar" />
-            <AvatarFallback className="bg-sky-500/20 text-sky-100">{workspaceStaticData.user.initials}</AvatarFallback>
+            <AvatarImage src={user.avatarUrl ?? undefined} alt="User avatar" />
+            <AvatarFallback className="bg-sky-500/20 text-sky-100">{user.initials}</AvatarFallback>
           </Avatar>
           {sidebarExpanded ? (
             <span className="min-w-0">
-              <span className="block truncate text-xs font-medium text-zinc-100">{workspaceStaticData.user.name}</span>
+              <span className="block truncate text-xs font-medium text-zinc-100">{user.name}</span>
               <span className="block truncate text-[11px] text-zinc-400">Account menu</span>
             </span>
           ) : null}
@@ -153,8 +157,8 @@ function UserMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64 border-zinc-700 bg-zinc-950 text-zinc-100" align={sidebarExpanded ? "start" : "end"}>
         <DropdownMenuLabel className="space-y-1">
-          <p className="text-sm font-medium text-zinc-100">{workspaceStaticData.user.name}</p>
-          <p className="text-xs text-zinc-400">{workspaceStaticData.user.email}</p>
+          <p className="text-sm font-medium text-zinc-100">{user.name}</p>
+          <p className="text-xs text-zinc-400">{user.email}</p>
           <Badge className="mt-1 rounded-full border border-amber-300/20 bg-amber-400/10 text-amber-200">
             <HandCoinsIcon size={14} className="mr-1 h-3.5 w-3.5" />
             {credits}/{maxCredits}
@@ -242,10 +246,12 @@ export function WorkspaceShell({
   tab,
   children,
   pageTitle,
+  user,
 }: {
   tab: SidebarTab
   children: ReactNode
   pageTitle?: string
+  user?: SessionUserSummary
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -259,9 +265,19 @@ export function WorkspaceShell({
   const [topExitHovered, setTopExitHovered] = useState(false)
   const [showTopTitle, setShowTopTitle] = useState(false)
 
+  const sessionUser = useSessionUser(
+    user ?? {
+      name: workspaceStaticData.user.name,
+      email: workspaceStaticData.user.email,
+      plan: workspaceStaticData.user.plan,
+      initials: workspaceStaticData.user.initials,
+      avatarUrl: workspaceStaticData.user.avatarUrl,
+    },
+  )
+
   const credits = workspaceStaticData.credits
   const maxCredits = workspaceStaticData.maxCredits
-  const isProUser = workspaceStaticData.user.plan === "pro"
+  const isProUser = sessionUser.plan === "pro"
 
   const isSettingsSuiteRoute = tab === "settings" || tab === "pricing" || tab === "checkout"
   const activeSettingsSection = settingsSectionFromParam(searchParams.get("section"))
@@ -376,6 +392,7 @@ export function WorkspaceShell({
                 <CreditsMeter credits={credits} maxCredits={maxCredits} />
               </div>
               <UserMenu
+                user={sessionUser}
                 credits={credits}
                 maxCredits={maxCredits}
                 sidebarExpanded={sidebarExpanded}

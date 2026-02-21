@@ -27,11 +27,11 @@ Last updated: 2026-02-20
 - [x] Implement 6-digit verification code generation and validation model
 - [x] Add email provider abstraction (Resend and SMTP fallback)
 - [x] Support local SMTP flow with Mailpit for dev
-- [ ] Implement password reset flow with email verification code
-- [ ] Implement social auth provider callback hardening and account linking rules
-- [ ] Enforce secure session cookie flags by environment
-- [ ] Add rate limiting and abuse controls for login/register/send-code
-- [ ] Add session invalidation on password change and suspicious auth events
+- [x] Implement password reset flow with email verification code
+- [x] Implement social auth provider callback hardening and account linking rules
+- [x] Enforce secure session cookie flags by environment
+- [x] Add rate limiting and abuse controls for login/register/send-code
+- [x] Add session invalidation on password change and suspicious auth events
 
 ## 3) Data Model and Persistence
 

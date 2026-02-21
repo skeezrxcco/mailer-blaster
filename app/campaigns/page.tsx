@@ -1,11 +1,14 @@
 import { Suspense } from "react"
 
+import { requirePageUser } from "@/lib/require-page-user"
 import { CampaignsPageClient } from "./campaignsPageClient"
 
-export default function CampaignsPage() {
+export default async function CampaignsPage() {
+  const initialUser = await requirePageUser("/campaigns")
+
   return (
     <Suspense fallback={null}>
-      <CampaignsPageClient />
+      <CampaignsPageClient initialUser={initialUser} />
     </Suspense>
   )
 }

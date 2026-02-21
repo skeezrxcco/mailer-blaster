@@ -9,13 +9,14 @@ import { LockIcon } from "@/components/ui/lock"
 import { ShieldCheckIcon } from "@/components/ui/shield-check"
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
 import { useCheckoutItem } from "@/hooks/use-checkout-item"
+import { type SessionUserSummary } from "@/types/session-user"
 
-export function CheckoutPageClient() {
+export function CheckoutPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
   const { checkoutItem } = useCheckoutItem()
 
   if (!checkoutItem) {
     return (
-      <WorkspaceShell tab="checkout" pageTitle="Checkout">
+      <WorkspaceShell tab="checkout" pageTitle="Checkout" user={initialUser}>
         <div className="flex min-h-0 h-full items-center justify-center p-4 md:p-6">
           <Card className="w-full max-w-xl rounded-3xl border-0 bg-zinc-950/72">
             <CardHeader>
@@ -33,7 +34,7 @@ export function CheckoutPageClient() {
     checkoutItem.billing === "monthly" ? "per month" : checkoutItem.billing === "annual" ? "per year" : "one-time payment"
 
   return (
-    <WorkspaceShell tab="checkout" pageTitle="Checkout">
+    <WorkspaceShell tab="checkout" pageTitle="Checkout" user={initialUser}>
       <div data-workspace-scroll className="scrollbar-hide min-h-0 h-full overflow-y-auto p-4 md:p-6">
         <div className="mb-5">
           <p className="text-sm text-zinc-400">Stripe-inspired payment experience with instant activation after payment.</p>

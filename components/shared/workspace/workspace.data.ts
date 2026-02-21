@@ -56,11 +56,11 @@ export const workspaceStaticData = {
   settingsDrawerDescription: "Manage account, plan, and billing.",
   workspaceDrawerDescription: "Move through workspace pages.",
   user: {
-    name: "Ricardo Pires",
-    email: "ricardo@example.com",
-    plan: "pro",
-    initials: "RP",
-    avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=128&q=80",
+    name: "Account",
+    email: "",
+    plan: "starter",
+    initials: "A",
+    avatarUrl: "",
   },
 }
 

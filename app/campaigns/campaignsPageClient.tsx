@@ -4,11 +4,11 @@ import { BarChart3, CalendarClock, Cpu, PlugZap } from "lucide-react"
 
 import { campaignsOps, pluginIntegrations } from "@/app/campaigns/campaigns-page.data"
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
-import { workspaceStaticData } from "@/components/shared/workspace/workspace.data"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { type SessionUserSummary } from "@/types/session-user"
 
 function statusTone(status: "live" | "scheduled" | "draft") {
   if (status === "live") return "bg-emerald-400/20 text-emerald-200"
@@ -16,11 +16,11 @@ function statusTone(status: "live" | "scheduled" | "draft") {
   return "bg-zinc-700/60 text-zinc-200"
 }
 
-export function CampaignsPageClient() {
-  const isProUser = workspaceStaticData.user.plan === "pro"
+export function CampaignsPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
+  const isProUser = initialUser.plan === "pro"
 
   return (
-    <WorkspaceShell tab="campaigns" pageTitle="Campaigns control center">
+    <WorkspaceShell tab="campaigns" pageTitle="Campaigns control center" user={initialUser}>
       <div data-workspace-scroll className="scrollbar-hide h-full min-h-0 overflow-y-auto p-4 md:p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>

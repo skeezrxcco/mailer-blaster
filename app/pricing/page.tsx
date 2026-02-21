@@ -1,11 +1,14 @@
 import { Suspense } from "react"
 
+import { requirePageUser } from "@/lib/require-page-user"
 import { PricingPageClient } from "./pricingPageClient"
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const initialUser = await requirePageUser("/pricing")
+
   return (
     <Suspense fallback={null}>
-      <PricingPageClient />
+      <PricingPageClient initialUser={initialUser} />
     </Suspense>
   )
 }

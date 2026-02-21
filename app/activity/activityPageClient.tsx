@@ -8,6 +8,7 @@ import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { type SessionUserSummary } from "@/types/session-user"
 
 function statusTone(status: CampaignRecord["status"]) {
   if (status === "sent") return "bg-emerald-400/20 text-emerald-200"
@@ -17,7 +18,7 @@ function statusTone(status: CampaignRecord["status"]) {
   return "bg-zinc-800 text-zinc-300"
 }
 
-export function ActivityPageClient() {
+export function ActivityPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
   const searchParams = useSearchParams()
   const campaignId = searchParams.get("campaign")
   const templateName = searchParams.get("template") || "Selected template"
@@ -63,7 +64,7 @@ export function ActivityPageClient() {
   }, [audienceCount, campaignId, queueStatus, templateName])
 
   return (
-    <WorkspaceShell tab="activity" pageTitle="Campaign activity">
+    <WorkspaceShell tab="activity" pageTitle="Campaign activity" user={initialUser}>
       <div data-workspace-scroll className="scrollbar-hide h-full min-h-0 overflow-y-auto p-4 md:p-6">
         <div className="mb-4">
           <h2 className="text-xl font-semibold text-zinc-100">Campaign activity</h2>
