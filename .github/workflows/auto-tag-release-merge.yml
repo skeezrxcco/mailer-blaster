@@ -1,0 +1,70 @@
+name: Auto Tag On Release Merge
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-tag-main-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  auto-tag:
+    name: Create Semver Tag From Release Merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag from merge commit message
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          msg="${{ github.event.head_commit.message }}"
+          echo "Head commit message: $msg"
+
+          tag=""
+          if [[ "$msg" =~ release/v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            tag="v${BASH_REMATCH[1]}"
+          elif [[ "$msg" =~ release/([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            tag="v${BASH_REMATCH[1]}"
+          fi
+
+          if [ -z "$tag" ]; then
+            echo "No release semver branch marker found. Skipping."
+            echo "should_tag=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag already exists locally: $tag"
+            echo "should_tag=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+            echo "Tag already exists remotely: $tag"
+            echo "should_tag=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "should_tag=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        if: steps.resolve.outputs.should_tag == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.resolve.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
