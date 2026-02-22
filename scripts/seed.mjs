@@ -87,6 +87,14 @@ async function main() {
     plan: "starter",
   })
 
+  const pro = await ensureUser({
+    email: "pro@blastermailer.local",
+    name: "Pro User",
+    password: "ChangeMe123!",
+    role: "user",
+    plan: "pro",
+  })
+
   await ensureContacts(admin.id, [
     { email: "ops@example.com", name: "Ops Team" },
     { email: "marketing@example.com", name: "Marketing Team" },
@@ -94,9 +102,13 @@ async function main() {
   await ensureContacts(starter.id, [
     { email: "first-contact@example.com", name: "First Contact" },
   ])
+  await ensureContacts(pro.id, [
+    { email: "vip-contact@example.com", name: "VIP Contact" },
+  ])
 
   await ensureCampaign(admin.id)
   await ensureCampaign(starter.id)
+  await ensureCampaign(pro.id)
 
   await prisma.waitingList.upsert({
     where: { email: "launch-interest@example.com" },
@@ -111,6 +123,7 @@ async function main() {
   console.log("Seed complete:")
   console.log("- admin@blastermailer.local / ChangeMe123!")
   console.log("- starter@blastermailer.local / ChangeMe123!")
+  console.log("- pro@blastermailer.local / ChangeMe123!")
 }
 
 main()

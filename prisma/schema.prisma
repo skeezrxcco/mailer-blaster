@@ -8,28 +8,30 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String?
-  plan          String    @default("starter")
-  role          String    @default("user")
-  sessionVersion Int      @default(1)
+  id                String    @id @default(cuid())
+  name              String?
+  email             String?   @unique
+  emailVerified     DateTime?
+  image             String?
+  passwordHash      String?
+  plan              String    @default("starter")
+  role              String    @default("user")
+  sessionVersion    Int       @default(1)
   passwordChangedAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  accounts       Account[]
-  sessions       Session[]
-  contacts       Contact[]
-  campaigns      Campaign[]
-  jobs           Job[]
-  messages       Message[]
-  emails         EmailMessage[]
-  authCodes      AuthCode[]
-  authEvents     AuthSecurityEvent[]
+  accounts           Account[]
+  sessions           Session[]
+  contacts           Contact[]
+  campaigns          Campaign[]
+  jobs               Job[]
+  messages           Message[]
+  emails             EmailMessage[]
+  authCodes          AuthCode[]
+  authEvents         AuthSecurityEvent[]
+  aiWorkflowSessions AiWorkflowSession[]
+  aiRequestTelemetry AiRequestTelemetry[]
 }
 
 model Account {
@@ -214,6 +216,70 @@ model AiUserDailyUsage {
   @@index([userId, day])
 }
 
+model AiWorkflowSession {
+  id                 String           @id @default(cuid())
+  userId             String
+  conversationId     String
+  state              AiWorkflowState  @default(INTENT_CAPTURE)
+  intent             AiWorkflowIntent @default(UNKNOWN)
+  selectedTemplateId String?
+  recipientStats     Json?
+  providerThreadRef  String?
+  summary            String?          @db.Text
+  contextJson        Json?
+  expiresAt          DateTime
+  lastActivityAt     DateTime         @default(now())
+  archivedAt         DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkpoints AiWorkflowCheckpoint[]
+  requests    AiRequestTelemetry[]
+
+  @@unique([userId, conversationId])
+  @@index([expiresAt])
+  @@index([userId, lastActivityAt])
+}
+
+model AiWorkflowCheckpoint {
+  id        String          @id @default(cuid())
+  sessionId String
+  state     AiWorkflowState
+  payload   Json?
+  createdAt DateTime        @default(now())
+
+  session AiWorkflowSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([createdAt])
+}
+
+model AiRequestTelemetry {
+  id               String   @id @default(cuid())
+  requestId        String
+  sessionId        String?
+  userId           String?
+  provider         String
+  model            String
+  latencyMs        Int?
+  tokenIn          Int?
+  tokenOut         Int?
+  estimatedCostUsd Float?
+  status           String
+  errorCode        String?
+  moderationAction String?
+  createdAt        DateTime @default(now())
+
+  session AiWorkflowSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  user    User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, createdAt])
+  @@index([userId, createdAt])
+  @@index([provider, model, createdAt])
+  @@index([createdAt])
+}
+
 model WaitingList {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -251,4 +317,24 @@ enum EmailStatus {
   QUEUED
   SENT
   FAILED
+}
+
+enum AiWorkflowState {
+  INTENT_CAPTURE
+  GOAL_BRIEF
+  TEMPLATE_DISCOVERY
+  TEMPLATE_SELECTED
+  CONTENT_REFINE
+  AUDIENCE_COLLECTION
+  VALIDATION_REVIEW
+  SEND_CONFIRMATION
+  QUEUED
+  COMPLETED
+}
+
+enum AiWorkflowIntent {
+  UNKNOWN
+  NEWSLETTER
+  SIMPLE_EMAIL
+  SIGNATURE
 }

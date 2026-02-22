@@ -2,66 +2,17 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
-import { generateAiText } from "@/lib/ai"
-import {
-  buildStageSystemPrompt,
-  createConversationId,
-  mergeSystemPrompts,
-  normalizeConversationId,
-  normalizeRequestedStage,
-  resolveOrchestrationStage,
-  sanitizePromptForAi,
-  type OrchestrationStage,
-} from "@/lib/ai-chat-orchestration"
-import { createJob } from "@/lib/jobs"
-import { createMessage } from "@/lib/messaging"
-import { prisma } from "@/lib/prisma"
+import { orchestrateAiChatStream } from "@/lib/ai/orchestrator"
+import { normalizeAiModelMode } from "@/lib/ai/model-mode"
+import type { AiStreamEvent } from "@/lib/ai/types"
 
 function statusForAiError(message: string): number {
   const normalized = message.toLowerCase()
-  if (
-    normalized.includes("daily free ai limit reached") ||
-    normalized.includes("daily free ai capacity is exhausted")
-  ) {
-    return 429
-  }
-  if (normalized.includes("no eligible ai provider available")) {
-    return 503
-  }
-  if (normalized.includes("no daily provider caps are configured")) {
-    return 503
-  }
-  if (normalized.includes("no ai provider api key configured")) {
-    return 503
-  }
-  if (normalized.includes("all ai providers failed")) {
-    return 502
-  }
+  if (normalized.includes("limit") || normalized.includes("rate")) return 429
+  if (normalized.includes("credit")) return 429
+  if (normalized.includes("unauthorized")) return 401
+  if (normalized.includes("provider") || normalized.includes("service")) return 503
   return 500
-}
-
-function extractStageFromMetadata(metadata: unknown): OrchestrationStage | null {
-  if (!metadata || typeof metadata !== "object") return null
-  const stage = (metadata as Record<string, unknown>).stage
-  return normalizeRequestedStage(typeof stage === "string" ? stage : undefined)
-}
-
-async function getPreviousConversationStage(userId: string, conversationId: string) {
-  const message = await prisma.message.findFirst({
-    where: {
-      userId,
-      channel: "ai",
-      conversationId,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    select: {
-      metadata: true,
-    },
-  })
-
-  return extractStageFromMetadata(message?.metadata)
 }
 
 export async function POST(request: Request) {
@@ -73,89 +24,52 @@ export async function POST(request: Request) {
   const body = (await request.json()) as {
     prompt?: string
     system?: string
+    mode?: string
     model?: string
     provider?: string
     conversationId?: string
-    stage?: string
-    async?: boolean
   }
 
-  const prompt = sanitizePromptForAi(String(body.prompt ?? ""))
-  if (!prompt.trim()) {
+  const prompt = String(body.prompt ?? "").trim()
+  if (!prompt) {
     return NextResponse.json({ error: "Prompt is required" }, { status: 422 })
   }
 
-  const conversationId = normalizeConversationId(body.conversationId) ?? createConversationId()
-  const requestedStage = normalizeRequestedStage(body.stage)
-  const previousStage = await getPreviousConversationStage(session.user.id, conversationId)
-  const stage = resolveOrchestrationStage({
-    requestedStage,
-    previousStage,
-    prompt,
-  })
-  const stageSystemPrompt = buildStageSystemPrompt(stage)
-  const systemPrompt = mergeSystemPrompts(stageSystemPrompt, body.system)
-
-  if (body.async) {
-    const job = await createJob({
-      userId: session.user.id,
-      type: "ai_generate",
-      payload: {
-        prompt,
-        system: systemPrompt,
-        model: body.model,
-        provider: body.provider,
-        conversationId,
-        stage,
-        userPlan: session.user.plan,
-      },
-    })
-
-    return NextResponse.json({ job, conversationId, stage }, { status: 202 })
-  }
-
   try {
-    const startedAt = Date.now()
-    const result = await generateAiText({
-      prompt,
-      system: systemPrompt,
-      model: body.model,
-      provider: body.provider,
+    let doneEvent: Extract<AiStreamEvent, { type: "done" }> | null = null
+    let sessionEvent: Extract<AiStreamEvent, { type: "session" }> | null = null
+
+    for await (const event of orchestrateAiChatStream({
       userId: session.user.id,
       userPlan: session.user.plan,
-    })
-    const latencyMs = Date.now() - startedAt
+      prompt,
+      conversationId: body.conversationId,
+      mode: normalizeAiModelMode(body.mode),
+      model: body.model,
+      provider: body.provider,
+      system: body.system,
+    })) {
+      if (event.type === "session") {
+        sessionEvent = event
+      }
+      if (event.type === "done") {
+        doneEvent = event
+      }
+    }
 
-    await createMessage({
-      userId: session.user.id,
-      role: "USER",
-      content: prompt,
-      channel: "ai",
-      conversationId,
-      metadata: { stage },
-    })
-
-    const assistantMessage = await createMessage({
-      userId: session.user.id,
-      role: "ASSISTANT",
-      content: result.text,
-      channel: "ai",
-      conversationId,
-      metadata: {
-        model: result.model,
-        provider: result.provider,
-        stage,
-        latencyMs,
-      },
-    })
+    if (!doneEvent) {
+      throw new Error("AI orchestration finished without a completion payload.")
+    }
 
     return NextResponse.json({
-      text: result.text,
-      model: result.model,
-      provider: result.provider,
-      conversationId,
-      stage,
-      message: assistantMessage,
+      text: doneEvent.text,
+      conversationId: doneEvent.conversationId ?? sessionEvent?.conversationId ?? body.conversationId ?? null,
+      state: doneEvent.state,
+      intent: doneEvent.intent,
+      selectedTemplateId: doneEvent.selectedTemplateId ?? null,
+      templateSuggestions: doneEvent.templateSuggestions ?? [],
+      recipientStats: doneEvent.recipientStats ?? null,
+      campaignId: doneEvent.campaignId ?? null,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI generation failed"

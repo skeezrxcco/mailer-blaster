@@ -1,218 +1,349 @@
 #!/usr/bin/env zsh
 
-# Blastermailer GitHub workflow helpers.
+# Blastermailer Git workflow shortcuts.
 # Load with:
 #   source ./scripts/blastermailer-gh-shortcuts.zsh
 
-_bm_require_gh() {
+setopt local_options no_nomatch
+
+_bm_color() {
+  local code="$1"
+  printf "\033[%sm" "$code"
+}
+
+_bm_reset() {
+  _bm_color "0"
+}
+
+_bm_info() {
+  _bm_color "36"
+  printf "info: %s\n" "$1"
+  _bm_reset
+}
+
+_bm_ok() {
+  _bm_color "32"
+  printf "ok: %s\n" "$1"
+  _bm_reset
+}
+
+_bm_warn() {
+  _bm_color "33"
+  printf "warn: %s\n" "$1"
+  _bm_reset
+}
+
+_bm_err() {
+  _bm_color "31"
+  printf "error: %s\n" "$1"
+  _bm_reset
+}
+
+_bm_require_git_repo() {
+  if [ ! -d ".git" ]; then
+    _bm_err "Not inside a git repository."
+    return 1
+  fi
+}
+
+_bm_require_gh_auth() {
   if ! command -v gh >/dev/null 2>&1; then
-    echo "gh CLI is not installed."
+    _bm_err "GitHub CLI (gh) is not installed."
     return 1
   fi
   if ! gh auth status >/dev/null 2>&1; then
-    echo "gh auth is not configured. Run bm_gh_auth first."
+    _bm_err "gh auth is not configured. Run: gh auth login"
     return 1
   fi
 }
 
-_bm_require_clean_git() {
-  if [ ! -d ".git" ]; then
-    echo "Not in a git repository."
-    return 1
-  fi
+_bm_require_clean_tree() {
   if ! git diff-index --quiet HEAD --; then
-    echo "Working tree is not clean. Commit or stash first."
+    _bm_err "Working tree is not clean. Commit or stash changes first."
     return 1
   fi
 }
 
-_bm_remote_branch_exists() {
-  local branch="$1"
-  git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1
+_bm_prompt_text() {
+  local label="$1"
+  local default_value="${2:-}"
+  local value=""
+  if [ -n "$default_value" ]; then
+    read "value?$label [$default_value]: "
+    value="${value:-$default_value}"
+  else
+    read "value?$label: "
+  fi
+  printf "%s" "$value"
 }
 
-bm_gh_auth() {
-  if ! command -v gh >/dev/null 2>&1; then
-    echo "gh CLI is not installed."
-    return 1
+_bm_confirm() {
+  local prompt="$1"
+  local default_yes="${2:-yes}"
+  local answer=""
+
+  if [ "$default_yes" = "yes" ]; then
+    read "answer?$prompt [Y/n]: "
+    answer="${answer:l}"
+    [[ -z "$answer" || "$answer" = "y" || "$answer" = "yes" ]]
+  else
+    read "answer?$prompt [y/N]: "
+    answer="${answer:l}"
+    [[ "$answer" = "y" || "$answer" = "yes" ]]
   fi
-  local token=""
-  read -r -s "token?GitHub token: "
-  echo
-  if [ -z "$token" ]; then
-    echo "Token is required."
-    return 1
-  fi
-  printf '%s' "$token" | gh auth login -h github.com --with-token
-  gh auth status
 }
 
-bm_pr() {
-  local base="${1:-dev}"
-  local title="${2:-$(git rev-parse --abbrev-ref HEAD)}"
-  local body="${3:-}"
+_bm_select_one() {
+  local label="$1"
+  local default_value="$2"
+  shift 2
+  local options=("$@")
 
-  _bm_require_gh || return 1
-  _bm_require_clean_git || return 1
-
-  local current_branch
-  current_branch="$(git rev-parse --abbrev-ref HEAD)"
-  if [ "$current_branch" = "$base" ]; then
-    echo "Current branch equals base branch ($base)."
+  if [ "${#options[@]}" -eq 0 ]; then
+    _bm_err "No options available for $label."
     return 1
   fi
 
-  if ! _bm_remote_branch_exists "$current_branch"; then
-    echo "Pushing branch $current_branch to origin..."
-    git push -u origin "$current_branch" || return 1
+  local selected=""
+  if command -v fzf >/dev/null 2>&1; then
+    selected="$(printf "%s\n" "${options[@]}" | fzf --height 40% --layout reverse --prompt "$label > " --select-1 --exit-0)"
+    if [ -n "$selected" ]; then
+      printf "%s" "$selected"
+      return 0
+    fi
   fi
 
+  _bm_info "$label:"
+  local idx=1
+  local default_index=1
+  for option in "${options[@]}"; do
+    if [ "$option" = "$default_value" ]; then
+      default_index="$idx"
+    fi
+    printf "  %d) %s\n" "$idx" "$option"
+    idx=$((idx + 1))
+  done
+
+  local input=""
+  read "input?Choose [${default_index}]: "
+  input="${input:-$default_index}"
+  if [[ ! "$input" =~ '^[0-9]+$' ]]; then
+    _bm_err "Invalid selection."
+    return 1
+  fi
+  local picked="${options[$input]}"
+  if [ -z "$picked" ]; then
+    _bm_err "Selection out of range."
+    return 1
+  fi
+  printf "%s" "$picked"
+}
+
+_bm_select_many_commits() {
+  local source_branch="$1"
+  local target_branch="$2"
+
+  local commits
+  commits="$(git log --reverse --oneline "${target_branch}..${source_branch}")"
+  if [ -z "$commits" ]; then
+    _bm_warn "No commits found to cherry-pick from $source_branch into $target_branch."
+    return 1
+  fi
+
+  local selected=""
+  if command -v fzf >/dev/null 2>&1; then
+    selected="$(printf "%s\n" "$commits" | fzf -m --height 50% --layout reverse --prompt "commits > ")"
+    if [ -n "$selected" ]; then
+      printf "%s\n" "$selected" | awk '{print $1}'
+      return 0
+    fi
+  fi
+
+  _bm_info "Available commits:"
+  local lines
+  lines=("${(@f)commits}")
+  local i=1
+  for line in "${lines[@]}"; do
+    printf "  %d) %s\n" "$i" "$line"
+    i=$((i + 1))
+  done
+  local answer=""
+  read "answer?Pick commit numbers (comma-separated) or 'all': "
+  answer="${answer:l}"
+
+  if [ "$answer" = "all" ]; then
+    printf "%s\n" "$commits" | awk '{print $1}'
+    return 0
+  fi
+
+  local picks=("${(@s:,:)answer}")
+  local sha_list=()
+  for pick in "${picks[@]}"; do
+    pick="${pick//[[:space:]]/}"
+    if [[ ! "$pick" =~ '^[0-9]+$' ]]; then
+      continue
+    fi
+    local line="${lines[$pick]}"
+    if [ -n "$line" ]; then
+      sha_list+=("$(printf "%s" "$line" | awk '{print $1}')")
+    fi
+  done
+
+  if [ "${#sha_list[@]}" -eq 0 ]; then
+    _bm_err "No valid commit selection."
+    return 1
+  fi
+  printf "%s\n" "${sha_list[@]}"
+}
+
+ghpr() {
+  _bm_require_git_repo || return 1
+  _bm_require_gh_auth || return 1
+
+  local base_branch
+  base_branch="$(git rev-parse --abbrev-ref HEAD)"
+  local branch_name
+  branch_name="$(_bm_prompt_text "Branch name")"
+  if [ -z "$branch_name" ]; then
+    _bm_err "Branch name is required."
+    return 1
+  fi
+  branch_name="${branch_name:l}"
+  branch_name="${branch_name// /-}"
+
+  local ticket
+  ticket="$(_bm_prompt_text "Ticket (optional)")"
+
+  git checkout -b "$branch_name" || return 1
+  git commit --allow-empty -m "Initial commit for $branch_name" || return 1
+  git push -u origin "$branch_name" || return 1
+
+  local pr_body="${ticket:+Ticket: $ticket}"
   gh pr create \
-    --base "$base" \
-    --head "$current_branch" \
-    --title "$title" \
-    --body "$body" \
+    --base "$base_branch" \
+    --head "$branch_name" \
+    --title "$branch_name" \
+    --body "$pr_body" \
     --assignee "@me" \
     --draft=false
 }
 
-bm_pr_hotfix() {
-  bm_pr "main" "${1:-hotfix: $(git rev-parse --abbrev-ref HEAD)}" "${2:-}"
-}
+ghm() {
+  _bm_require_git_repo || return 1
+  _bm_require_clean_tree || return 1
 
-bm_pr_master() {
-  bm_pr_hotfix "$@"
-}
+  git fetch origin --prune >/dev/null 2>&1
 
-bm_pr_dev() {
-  bm_pr "dev" "${1:-dev: $(git rev-parse --abbrev-ref HEAD)}" "${2:-}"
-}
-
-bm_merge_pr() {
-  local pr="$1"
-  local method="${2:-squash}" # merge | squash | rebase
-  if [ -z "$pr" ]; then
-    echo "Usage: bm_merge_pr <pr_number_or_url> [merge|squash|rebase]"
-    return 1
-  fi
-
-  _bm_require_gh || return 1
-
-  case "$method" in
-    merge) gh pr merge "$pr" --merge --delete-branch ;;
-    rebase) gh pr merge "$pr" --rebase --delete-branch ;;
-    *) gh pr merge "$pr" --squash --delete-branch ;;
-  esac
-}
-
-bm_merge_main() {
-  bm_merge_pr "$1" "${2:-merge}"
-}
-
-bm_merge_master() {
-  bm_merge_main "$@"
-}
-
-bm_merge_dev() {
-  bm_merge_pr "$1" "${2:-squash}"
-}
-
-bm_cherrypick_to_release() {
-  local pr="$1"
-  local release_branch="$2"
-
-  if [ -z "$pr" ] || [ -z "$release_branch" ]; then
-    echo "Usage: bm_cherrypick_to_release <pr_number_or_url> <release_branch>"
-    return 1
-  fi
-
-  _bm_require_gh || return 1
-  _bm_require_clean_git || return 1
-
-  local base_ref
-  base_ref="$(gh pr view "$pr" --json baseRefName --jq '.baseRefName')" || return 1
-  if [ "$base_ref" != "dev" ]; then
-    echo "PR base is $base_ref, expected dev."
-    return 1
-  fi
-
-  local merge_sha
-  merge_sha="$(gh pr view "$pr" --json mergeCommit --jq '.mergeCommit.oid')" || return 1
-  if [ -z "$merge_sha" ] || [ "$merge_sha" = "null" ]; then
-    echo "PR is not merged yet (no merge commit)."
+  local branches
+  branches=("${(@f)$(git for-each-ref --format='%(refname:short)' refs/heads | sort)}")
+  if [ "${#branches[@]}" -eq 0 ]; then
+    _bm_err "No local branches found."
     return 1
   fi
 
   local current_branch
   current_branch="$(git rev-parse --abbrev-ref HEAD)"
 
-  git fetch origin || return 1
-  git checkout "$release_branch" || return 1
-  git pull --rebase origin "$release_branch" || return 1
-  git cherry-pick -x "$merge_sha" || return 1
-  git push origin "$release_branch" || return 1
-  git checkout "$current_branch" || return 1
+  local source_branch
+  source_branch="$(_bm_select_one "Select source branch to merge" "$current_branch" "${branches[@]}")" || return 1
+
+  local target_options=()
+  local branch
+  for branch in "${branches[@]}"; do
+    if [ "$branch" != "$source_branch" ]; then
+      target_options+=("$branch")
+    fi
+  done
+  local target_default="main"
+  if [[ ! " ${target_options[*]} " =~ " $target_default " ]]; then
+    target_default="${target_options[1]}"
+  fi
+  local target_branch
+  target_branch="$(_bm_select_one "Select target branch" "$target_default" "${target_options[@]}")" || return 1
+
+  _bm_info "Merge plan: $source_branch -> $target_branch"
+  if ! _bm_confirm "Continue merge?" "yes"; then
+    _bm_warn "Merge canceled."
+    return 0
+  fi
+
+  git checkout "$target_branch" || return 1
+  git pull --rebase origin "$target_branch" || return 1
+  git merge --no-ff "$source_branch" -m "chore(merge): $source_branch into $target_branch" || return 1
+  git push origin "$target_branch" || return 1
+  _bm_ok "Merged $source_branch into $target_branch and pushed."
+
+  if _bm_confirm "Delete source branch '$source_branch' locally and remotely?" "yes"; then
+    if [ "$source_branch" != "$target_branch" ]; then
+      git branch -d "$source_branch" >/dev/null 2>&1 || git branch -D "$source_branch" >/dev/null 2>&1
+      git push origin --delete "$source_branch" >/dev/null 2>&1 || true
+      _bm_ok "Deleted branch $source_branch."
+    fi
+  fi
 }
 
-bm_merge_dev_and_cherrypick() {
-  local pr="$1"
-  local release_branch="$2"
-  local method="${3:-squash}"
+ghcp() {
+  _bm_require_git_repo || return 1
+  _bm_require_clean_tree || return 1
 
-  if [ -z "$pr" ] || [ -z "$release_branch" ]; then
-    echo "Usage: bm_merge_dev_and_cherrypick <pr_number_or_url> <release_branch> [merge|squash|rebase]"
+  local target_branch
+  target_branch="$(git rev-parse --abbrev-ref HEAD)"
+  git fetch origin --prune >/dev/null 2>&1
+
+  local source_candidates
+  source_candidates=("${(@f)$(git for-each-ref --format='%(refname:short)' refs/heads | sort)}")
+  local filtered=()
+  local b
+  for b in "${source_candidates[@]}"; do
+    if [ "$b" != "$target_branch" ]; then
+      filtered+=("$b")
+    fi
+  done
+  if [ "${#filtered[@]}" -eq 0 ]; then
+    _bm_err "No source branches available."
     return 1
   fi
 
-  bm_merge_pr "$pr" "$method" || return 1
-  bm_cherrypick_to_release "$pr" "$release_branch"
-}
+  local source_branch
+  source_branch="$(_bm_select_one "Cherry-pick from branch" "${filtered[1]}" "${filtered[@]}")" || return 1
 
-bm_promote_release() {
-  local release_branch="$1"
-  local main_branch="${2:-main}"
-  local dev_branch="${3:-dev}"
-
-  if [ -z "$release_branch" ]; then
-    echo "Usage: bm_promote_release <release_branch> [main_branch] [dev_branch]"
-    return 1
+  local mode_choice=""
+  if command -v fzf >/dev/null 2>&1; then
+    mode_choice="$(printf "%s\n" "select commits" "all commits" | fzf --height 30% --layout reverse --prompt "Mode > " --select-1 --exit-0)"
+  fi
+  if [ -z "$mode_choice" ]; then
+    _bm_info "Cherry-pick mode:"
+    printf "  1) select commits\n"
+    printf "  2) all commits\n"
+    read "mode_choice?Choose [1]: "
+    case "${mode_choice:-1}" in
+      2) mode_choice="all commits" ;;
+      *) mode_choice="select commits" ;;
+    esac
   fi
 
-  _bm_require_clean_git || return 1
-
-  local current_branch
-  current_branch="$(git rev-parse --abbrev-ref HEAD)"
-
-  git fetch origin || return 1
-
-  git checkout "$main_branch" || return 1
-  git pull --rebase origin "$main_branch" || return 1
-  git merge --no-ff "$release_branch" -m "chore(release): merge $release_branch into $main_branch" || return 1
-  git push origin "$main_branch" || return 1
-
-  git checkout "$dev_branch" || return 1
-  git pull --rebase origin "$dev_branch" || return 1
-  git merge --no-ff "$main_branch" -m "chore(sync): merge $main_branch into $dev_branch" || return 1
-  git push origin "$dev_branch" || return 1
-
-  git checkout "$current_branch" || return 1
-}
-
-bm_promote_release_master() {
-  bm_promote_release "$1" "main" "dev"
-}
-
-bm_pr_checks() {
-  local pr="$1"
-  if [ -z "$pr" ]; then
-    echo "Usage: bm_pr_checks <pr_number_or_url>"
-    return 1
+  local shas=()
+  if [ "$mode_choice" = "all commits" ]; then
+    shas=("${(@f)$(git log --reverse --format='%H' "${target_branch}..${source_branch}")}")
+  else
+    shas=("${(@f)$(_bm_select_many_commits "$source_branch" "$target_branch")}")
   fi
-  _bm_require_gh || return 1
-  gh pr checks "$pr"
+
+  if [ "${#shas[@]}" -eq 0 ]; then
+    _bm_warn "No commits selected."
+    return 0
+  fi
+
+  _bm_info "Cherry-picking ${#shas[@]} commit(s) into $target_branch"
+  local sha
+  for sha in "${shas[@]}"; do
+    _bm_info "cherry-pick $sha"
+    if ! git cherry-pick -x "$sha"; then
+      _bm_err "Cherry-pick failed for $sha. Resolve conflicts and continue manually."
+      return 1
+    fi
+  done
+
+  _bm_ok "Cherry-pick completed into $target_branch."
 }
 
-bm_ci_watch() {
-  _bm_require_gh || return 1
-  gh run watch
-}

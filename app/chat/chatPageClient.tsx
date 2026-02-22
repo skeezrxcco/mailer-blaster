@@ -2,9 +2,11 @@
 
 import { type DragEvent, type ReactNode, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Check, Monitor, Pencil, Smartphone, Sparkles, TabletSmartphone, Trash2, Upload } from "lucide-react"
+import { Check, ChevronDown, Monitor, Pencil, Smartphone, Sparkles, TabletSmartphone, Trash2, Upload } from "lucide-react"
 
 import {
+  chatHeroSubtitle,
+  chatHeroTitle,
   chatCopy,
   confirmedTemplateNotice,
   initialChatMessages,
@@ -18,8 +20,10 @@ import { EyeIcon } from "@/components/ui/eye"
 import { TemplatePreview } from "@/components/shared/newsletter/template-preview"
 import { buildEditorData, templateOptions, type TemplateEditorData, type TemplateOption } from "@/components/shared/newsletter/template-data"
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
+import { useAiCredits } from "@/hooks/use-ai-credits"
 import { type SessionUserSummary } from "@/types/session-user"
 import { cn } from "@/lib/utils"
+import type { AiStreamEvent } from "@/lib/ai/types"
 
 type ValidationStats = {
   total: number
@@ -52,12 +56,35 @@ type EditorThemeState = {
 
 type Message = ChatMessageSeed & {
   validationStats?: ValidationStats
+  templateSuggestionIds?: string[]
+  campaignId?: string
 }
 
 type EditorChatMessage = {
   id: number
   role: "assistant" | "user"
   text: string
+}
+
+type ModelChoice = {
+  id: string
+  label: string
+  shortLabel: string
+  mode: "essential" | "balanced" | "premium"
+  requiresPro?: boolean
+  quotaMultiplier: number
+}
+
+type ChatSessionSummary = {
+  conversationId: string
+  state: string
+  intent: string
+  selectedTemplateId?: string | null
+  summary?: string | null
+  context?: {
+    goal?: string
+  } | null
+  lastActivityAt?: string
 }
 
 type CsvParseResult =
@@ -69,6 +96,12 @@ const viewportSpecs: Record<PreviewMode, { label: string; width: number; height:
   tablet: { label: "Tablet", width: 834, height: 1112 },
   mobile: { label: "Mobile", width: 390, height: 844 },
 }
+
+const modelChoices: ModelChoice[] = [
+  { id: "essential", label: "Fast", shortLabel: "Fast", mode: "essential", quotaMultiplier: 1 },
+  { id: "balanced", label: "Powerful", shortLabel: "Powerful", mode: "balanced", requiresPro: true, quotaMultiplier: 3 },
+  { id: "premium", label: "Max", shortLabel: "Max", mode: "premium", requiresPro: true, quotaMultiplier: 8 },
+]
 
 function looksLikeEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
@@ -486,14 +519,24 @@ function EmailValidationPanel({
   )
 }
 
+function formatAssistantText(text: string) {
+  return text
+    .replace(/\s(\d+\.)\s/g, "\n$1 ")
+    .replace(/:\s(\d+\.)\s/g, ":\n$1 ")
+    .replace(/([?!])\s([A-Z])/g, "$1\n$2")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 function AnimatedBotText({ text }: { text: string }) {
+  const formattedText = formatAssistantText(text)
   const [visible, setVisible] = useState("")
   const [isTyping, setIsTyping] = useState(true)
   const animatedRef = useRef(false)
 
   useEffect(() => {
     if (animatedRef.current) {
-      setVisible(text)
+      setVisible(formattedText)
       setIsTyping(false)
       return
     }
@@ -505,36 +548,33 @@ function AnimatedBotText({ text }: { text: string }) {
     let index = 0
     const timer = window.setInterval(() => {
       index += 1
-      setVisible(text.slice(0, index))
-      if (index >= text.length) {
+      setVisible(formattedText.slice(0, index))
+      if (index >= formattedText.length) {
         window.clearInterval(timer)
         setIsTyping(false)
       }
     }, 10)
 
     return () => window.clearInterval(timer)
-  }, [text])
+  }, [formattedText])
 
   return (
-    <p className="leading-relaxed">
+    <p className="whitespace-pre-wrap wrap-break-word leading-relaxed">
       {visible}
       {isTyping ? <span className="ml-0.5 inline-block h-4 w-[1px] animate-pulse bg-zinc-300 align-middle" /> : null}
     </p>
   )
 }
 
-function ActivityBubble({ label }: { label: string }) {
+function AssistantSignal() {
   return (
     <div className="flex justify-start">
-      <div className="rounded-2xl bg-zinc-900/90 px-3 py-2 text-xs text-zinc-300">
-        <div className="flex items-center gap-2">
-          {label}
-          <span className="inline-flex gap-1">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-300" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-300 [animation-delay:120ms]" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-300 [animation-delay:240ms]" />
-          </span>
-        </div>
+      <div className="inline-flex items-center gap-2 rounded-full bg-zinc-900/70 px-3 py-2">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-300/35" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-300/85" />
+        </span>
+        <span className="h-1.5 w-12 animate-pulse rounded-full bg-zinc-700" />
       </div>
     </div>
   )
@@ -1312,15 +1352,31 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
   const [isCsvProcessing, setIsCsvProcessing] = useState(false)
   const [isAiResponding, setIsAiResponding] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
+  const [workflowState, setWorkflowState] = useState<string>("INTENT_CAPTURE")
+  const [selectedModelChoice, setSelectedModelChoice] = useState<string>("essential")
+  const [isComposerStacked, setIsComposerStacked] = useState(false)
+  const isPaidPlan = initialUser.plan === "pro" || initialUser.plan === "premium" || initialUser.plan === "enterprise"
+  const aiQuota = useAiCredits()
+  const isOutOfCredits = aiQuota.exhausted
+  const templateParam = searchParams.get("template")
+  const newChatParam = searchParams.get("newChat")
+  const conversationIdParam = searchParams.get("conversationId")
 
   const resizeTextarea = () => {
     const element = textareaRef.current
     if (!element) return
-    element.style.height = "auto"
-    const maxHeight = 240
+    const minHeight = 28
+    const maxHeight = 132
+    element.style.height = "0px"
     const nextHeight = Math.min(element.scrollHeight, maxHeight)
-    element.style.height = `${Math.max(nextHeight, 50)}px`
+    element.style.height = `${Math.max(nextHeight, minHeight)}px`
     element.style.overflowY = element.scrollHeight > maxHeight ? "auto" : "hidden"
+    setIsComposerStacked(element.value.includes("\n") || nextHeight > 44)
+  }
+
+  const handlePromptChange = (value: string) => {
+    setPrompt(value)
+    requestAnimationFrame(() => resizeTextarea())
   }
 
   const applyTemplateSelection = (template: TemplateOption, announce = true) => {
@@ -1338,6 +1394,46 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
     }
   }
 
+  const clearConversationWorkspace = () => {
+    setMessages([])
+    setPrompt("")
+    setSelectedTemplate(null)
+    setTemplateData(null)
+    setThemeState(null)
+    setDishOrder(["one", "two"])
+    setEmailEntries([])
+    setComposerMode("prompt")
+    setWorkflowState("INTENT_CAPTURE")
+    setIsPreviewOpen(false)
+    setIsEditorOpen(false)
+  }
+
+  const applySessionToUi = (session: ChatSessionSummary, options?: { injectSummaryMessage?: boolean }) => {
+    setConversationId(session.conversationId)
+    setWorkflowState(session.state || "INTENT_CAPTURE")
+    setComposerMode(session.state === "AUDIENCE_COLLECTION" || session.state === "VALIDATION_REVIEW" ? "emails" : "prompt")
+
+    if (session.selectedTemplateId) {
+      const template = templateOptions.find((entry) => entry.id === session.selectedTemplateId)
+      if (template) {
+        applyTemplateSelection(template, false)
+      }
+    } else {
+      setSelectedTemplate(null)
+      setTemplateData(null)
+      setThemeState(null)
+    }
+
+    if (options?.injectSummaryMessage) {
+      const summary = session.summary?.trim()
+      setMessages(
+        summary
+          ? [{ id: Date.now(), role: "bot", text: summary }]
+          : [{ id: Date.now(), role: "bot", text: "Conversation loaded. Tell me what you want to do next." }],
+      )
+    }
+  }
+
   useEffect(() => {
     resizeTextarea()
   }, [prompt])
@@ -1352,9 +1448,8 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
 
   useEffect(() => {
     if (initializedFromTemplateRef.current) return
-    const templateId = searchParams.get("template")
-    if (!templateId) return
-    const template = templateOptions.find((item) => item.id === templateId)
+    if (!templateParam) return
+    const template = templateOptions.find((item) => item.id === templateParam)
     if (!template) return
 
     initializedFromTemplateRef.current = true
@@ -1363,12 +1458,123 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
       ...prev,
       { id: Date.now(), role: "bot", text: selectedTemplateNotice(template.name), kind: "templateReview" },
     ])
-  }, [searchParams])
+  }, [templateParam])
+
+  useEffect(() => {
+    if (!conversationId) return
+    try {
+      window.sessionStorage.setItem("bm_ai_conversation_id", conversationId)
+    } catch {
+      // Ignore storage failures in private mode.
+    }
+  }, [conversationId])
+
+  const loadSessionSnapshot = async (targetConversationId?: string | null) => {
+    const query = targetConversationId ? `?conversationId=${encodeURIComponent(targetConversationId)}` : ""
+    const response = await fetch(`/api/ai/session${query}`, {
+      method: "GET",
+      cache: "no-store",
+    })
+    if (!response.ok) return null
+
+    const payload = (await response.json()) as {
+      session?: ChatSessionSummary | null
+    }
+
+    return payload.session ?? null
+  }
+
+  const startNewConversation = async () => {
+    if (isAiResponding) return
+    const newConversationId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `conv-${Date.now().toString(36)}`
+
+    const response = await fetch("/api/ai/session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        conversationId: newConversationId,
+      }),
+    })
+
+    if (!response.ok) return
+    const payload = (await response.json()) as {
+      session?: ChatSessionSummary | null
+    }
+    clearConversationWorkspace()
+    if (payload.session) {
+      applySessionToUi(payload.session)
+    } else {
+      setConversationId(newConversationId)
+    }
+    router.replace("/chat")
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    const hydrateSession = async () => {
+      try {
+        const fromStorage = window.sessionStorage.getItem("bm_ai_conversation_id")
+        const preferredConversationId = conversationIdParam || fromStorage || null
+        const shouldCreateNewChat = newChatParam === "1"
+
+        if (shouldCreateNewChat) {
+          await startNewConversation()
+          return
+        }
+
+        let session: ChatSessionSummary | null = null
+        if (!templateParam) {
+          session = await loadSessionSnapshot(preferredConversationId)
+          if (!session && preferredConversationId) {
+            session = await loadSessionSnapshot(null)
+          }
+        } else {
+          await loadSessionSnapshot(preferredConversationId)
+        }
+
+        if (session && !cancelled) {
+          applySessionToUi(session)
+        }
+      } catch {
+        // Ignore hydration failures.
+      }
+    }
+
+    void hydrateSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [conversationIdParam, newChatParam, templateParam])
 
   const sendPrompt = async () => {
     const value = prompt.trim()
     if (!value) return
     if (isAiResponding) return
+    if (isOutOfCredits) {
+      const creditsMessage = isPaidPlan
+        ? "You've used your monthly quota. It resets at the start of next month."
+        : "You've used your monthly quota. Upgrade to Pro for a larger allowance."
+      setMessages((prev) => {
+        const lastMessage = prev[prev.length - 1]
+        if (lastMessage?.role === "bot" && lastMessage.text === creditsMessage) return prev
+        return [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "bot",
+            text: creditsMessage,
+          },
+        ]
+      })
+      return
+    }
 
     if (composerMode === "emails") {
       const parsed = parseEmailEntries(value)
@@ -1392,12 +1598,17 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
     }
 
     const userMessage: Message = { id: Date.now(), role: "user", text: value }
-    setMessages((prev) => [...prev, userMessage])
+    const assistantMessageId = Date.now() + 1
+    setMessages((prev) => [...prev, userMessage, { id: assistantMessageId, role: "bot", text: "" }])
     setPrompt("")
+
+    const chosenModel = modelChoices.find((option) => option.id === selectedModelChoice) ?? modelChoices[0]
+    const resolvedMode = !isPaidPlan && chosenModel.requiresPro ? "essential" : chosenModel.mode
+    let activeConversationId = conversationId
 
     setIsAiResponding(true)
     try {
-      const response = await fetch("/api/ai/generate", {
+      const response = await fetch("/api/ai/stream", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1405,54 +1616,187 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
         body: JSON.stringify({
           prompt: value,
           conversationId: conversationId ?? undefined,
+          mode: resolvedMode,
         }),
       })
 
-      const payload = (await response.json()) as {
-        text?: string
-        error?: string
-        conversationId?: string
-      }
-
       if (!response.ok) {
-        throw new Error(payload.error ?? "AI request failed")
+        const errorText = await response.text()
+        throw new Error(errorText || "AI request failed")
       }
 
-      if (payload.conversationId) {
-        setConversationId(payload.conversationId)
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error("AI stream did not return a readable body.")
       }
 
-      setMessages((prev) => {
-        const next: Message[] = [
-          ...prev,
-          {
-            id: Date.now() + 1,
-            role: "bot",
-            text: String(payload.text ?? "Done."),
-          },
-        ]
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let streamedText = ""
+      let assistantKind: Message["kind"] | undefined
+      let suggestionIds: string[] | undefined
+      let pendingCampaignId: string | undefined
+      let doneState: string | undefined
 
-        if (!selectedTemplate && !prev.some((entry) => entry.kind === "suggestions")) {
-          next.push({
-            id: Date.now() + 2,
-            role: "bot",
-            text: chatCopy.suggestionsIntro,
-            kind: "suggestions",
-          })
+      const updateAssistant = (patch: Partial<Message>) => {
+        setMessages((prev) =>
+          prev.map((message) => (message.id === assistantMessageId ? { ...message, ...patch } : message)),
+        )
+      }
+
+      while (true) {
+        const { value: chunk, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(chunk, { stream: true })
+        const frames = buffer.split("\n\n")
+        buffer = frames.pop() ?? ""
+
+        for (const frame of frames) {
+          const lines = frame.split("\n").map((line) => line.trim())
+          const dataLine = lines.find((line) => line.startsWith("data:"))
+          if (!dataLine) continue
+
+          let event: AiStreamEvent | null = null
+          try {
+            event = JSON.parse(dataLine.slice(5).trim()) as AiStreamEvent
+          } catch {
+            event = null
+          }
+          if (!event) continue
+
+          if (event.type === "session") {
+            activeConversationId = event.conversationId
+            setConversationId(event.conversationId)
+            setWorkflowState(event.state)
+            continue
+          }
+
+          if (event.type === "state_patch") {
+            setWorkflowState(event.state)
+            if (event.state === "AUDIENCE_COLLECTION" || event.state === "VALIDATION_REVIEW") {
+              setComposerMode("emails")
+            }
+            if (event.selectedTemplateId) {
+              const template = templateOptions.find((entry) => entry.id === event.selectedTemplateId)
+              if (template) {
+                applyTemplateSelection(template, false)
+                assistantKind = "templateReview"
+              }
+            }
+            continue
+          }
+
+          if (event.type === "tool_result") {
+            if (event.result.templateSuggestions?.length) {
+              suggestionIds = event.result.templateSuggestions.map((template) => template.id)
+              assistantKind = "suggestions"
+            }
+            if (event.result.campaignId) {
+              pendingCampaignId = event.result.campaignId
+            }
+            continue
+          }
+
+          if (event.type === "token") {
+            streamedText += event.token
+            updateAssistant({
+              text: streamedText,
+              kind: assistantKind,
+              templateSuggestionIds: suggestionIds,
+              campaignId: pendingCampaignId,
+            })
+            continue
+          }
+
+          if (event.type === "moderation") {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: Date.now() + 3,
+                role: "bot",
+                text: event.message,
+              },
+            ])
+            continue
+          }
+
+          if (event.type === "done") {
+            doneState = event.state
+            activeConversationId = event.conversationId
+            setConversationId(event.conversationId)
+            setWorkflowState(event.state)
+
+            if (event.selectedTemplateId) {
+              const template = templateOptions.find((entry) => entry.id === event.selectedTemplateId)
+              if (template) {
+                applyTemplateSelection(template, false)
+                assistantKind = "templateReview"
+              }
+            }
+
+            if (event.templateSuggestions?.length) {
+              suggestionIds = event.templateSuggestions.map((template) => template.id)
+              assistantKind = "suggestions"
+            }
+
+            if (event.state === "AUDIENCE_COLLECTION") {
+              setComposerMode("emails")
+              assistantKind = assistantKind ?? "emailRequest"
+            }
+
+            if (event.state === "VALIDATION_REVIEW") {
+              setComposerMode("emails")
+              assistantKind = assistantKind ?? "validation"
+            }
+
+            pendingCampaignId = event.campaignId ?? pendingCampaignId
+            streamedText = event.text || streamedText
+            updateAssistant({
+              text: streamedText || "Done.",
+              kind: assistantKind,
+              templateSuggestionIds: suggestionIds,
+              campaignId: pendingCampaignId,
+            })
+            continue
+          }
+
+          if (event.type === "error") {
+            throw new Error(event.error)
+          }
         }
+      }
 
-        return next
-      })
+      if (doneState === "QUEUED") {
+        const campaignId = pendingCampaignId ?? `cmp-${Date.now().toString().slice(-8)}`
+        const validAudience = computeValidationStats(emailEntries).valid
+        router.push(
+          `/campaigns?campaign=${campaignId}&template=${encodeURIComponent(
+            selectedTemplate?.name ?? "Campaign",
+          )}&audience=${validAudience}`,
+        )
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not generate an AI response."
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "bot",
-          text: `AI error: ${message}`,
-        },
-      ])
+      setMessages((prev) => {
+        let replaced = false
+        const next = prev.map((entry) => {
+          if (entry.id !== assistantMessageId) return entry
+          replaced = true
+          return {
+            ...entry,
+            text: `AI error: ${message}`,
+          }
+        })
+        if (replaced) return next
+        return [
+          ...next,
+          {
+            id: Date.now() + 2,
+            role: "bot",
+            text: `AI error: ${message}`,
+          },
+        ]
+      })
     } finally {
       setIsAiResponding(false)
     }
@@ -1562,158 +1906,273 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
       {
         id: Date.now(),
         role: "bot",
-        text: `Campaign queued. Redirecting to activity. Queue ID: ${campaignId}`,
+        text: `Campaign queued. Opening campaigns workspace. Queue ID: ${campaignId}`,
       },
     ])
     setComposerMode("prompt")
-    router.push(`/activity?campaign=${campaignId}&template=${encodeURIComponent(selectedTemplate.name)}&audience=${stats.valid}`)
+    router.push(`/campaigns?campaign=${campaignId}&template=${encodeURIComponent(selectedTemplate.name)}&audience=${stats.valid}`)
   }
+
+  const showHero = messages.length === 0 && workflowState === "INTENT_CAPTURE" && !isAiResponding
+  const canUploadCsv = composerMode === "emails" && !isCsvProcessing && !isOutOfCredits
+
+  const renderUploadButton = (disabled: boolean) => (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => csvFileInputRef.current?.click()}
+      className={cn(
+        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none transition",
+        !disabled ? "bg-zinc-950 text-zinc-100 hover:bg-zinc-900" : "cursor-not-allowed bg-zinc-950/55 text-zinc-600",
+      )}
+      aria-label="Upload CSV recipients"
+    >
+      +
+    </button>
+  )
+
+  const renderModeSelector = () => {
+    const activeChoice = modelChoices.find((c) => c.id === selectedModelChoice) ?? modelChoices[0]
+
+    return (
+      <div className="relative shrink-0">
+        <select
+          value={isPaidPlan ? selectedModelChoice : "essential"}
+          onChange={(event) => {
+            const nextId = event.target.value
+            const nextChoice = modelChoices.find((choice) => choice.id === nextId)
+            if (nextChoice?.requiresPro && !isPaidPlan) {
+              setSelectedModelChoice("essential")
+              return
+            }
+            setSelectedModelChoice(nextId)
+          }}
+          disabled={isOutOfCredits}
+          className="h-9 max-w-[46vw] appearance-none rounded-full bg-zinc-950/80 pl-3.5 pr-10 text-[11px] font-medium text-zinc-200 outline-none transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-500 sm:max-w-[200px]"
+          aria-label="AI model"
+        >
+          {modelChoices.map((choice) => {
+            const locked = !isPaidPlan && choice.requiresPro
+            return (
+              <option key={choice.id} value={choice.id} disabled={locked} className="bg-zinc-950 text-zinc-100">
+                {choice.label} · {choice.quotaMultiplier}x{locked ? " (Pro)" : ""}
+              </option>
+            )
+          })}
+        </select>
+        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-full bg-zinc-800/80 px-1.5 py-1">
+          <span className="text-[10px] font-medium text-zinc-400">{activeChoice.quotaMultiplier}x</span>
+          <ChevronDown className="h-3 w-3 text-zinc-400" />
+        </span>
+      </div>
+    )
+  }
+
+  const renderUpgradeCta = () => {
+    if (isPaidPlan) return null
+    return (
+      <Button
+        type="button"
+        onClick={() => router.push("/pricing")}
+        className="h-9 shrink-0 rounded-full bg-zinc-100 px-4 text-xs font-semibold text-zinc-900 hover:bg-zinc-200"
+      >
+        {isOutOfCredits ? "Upgrade" : "Unlock Pro"}
+      </Button>
+    )
+  }
+
+  const composer = (
+    <div
+      className={cn(
+        "rounded-[30px] bg-zinc-900/55 px-4 py-3 shadow-[0_18px_44px_-24px_rgba(0,0,0,0.9)] ring-1 ring-zinc-700/60 backdrop-blur-xl",
+        showHero ? "w-full max-w-4xl" : "",
+      )}
+    >
+      <input
+        ref={csvFileInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="hidden"
+        onChange={(event) => processCsvFile(event.target.files?.[0] ?? null)}
+      />
+      <div className={cn("flex gap-3 transition-all duration-300 ease-out", isComposerStacked ? "items-start" : "items-center")}>
+        {!isComposerStacked ? renderUploadButton(!canUploadCsv) : null}
+        <textarea
+          ref={textareaRef}
+          value={prompt}
+          onChange={(event) => handlePromptChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault()
+              sendPrompt()
+            }
+          }}
+          placeholder={
+            isOutOfCredits
+              ? "Monthly quota used up. Resets next month."
+              : composerMode === "emails"
+                ? chatCopy.emailInputPlaceholder
+                : chatCopy.promptPlaceholder
+          }
+          rows={1}
+          disabled={isOutOfCredits}
+          className="scrollbar-hide min-h-[28px] max-h-[132px] w-full resize-none bg-transparent py-2.5 text-sm leading-6 text-zinc-100 placeholder:text-zinc-500 focus:outline-none disabled:text-zinc-500 md:text-[15px]"
+        />
+        {!isComposerStacked ? renderModeSelector() : null}
+        {!isComposerStacked ? renderUpgradeCta() : null}
+      </div>
+      <div
+        className={cn(
+          "overflow-hidden transition-all duration-300 ease-out",
+          isComposerStacked ? "mt-2 max-h-12 opacity-100" : "max-h-0 opacity-0",
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {renderUploadButton(!canUploadCsv)}
+            {renderModeSelector()}
+          </div>
+          {renderUpgradeCta()}
+        </div>
+      </div>
+      {isOutOfCredits ? (
+        <div className="mt-2 flex items-center justify-between rounded-xl bg-zinc-950/70 px-3 py-2 text-xs">
+          <span className="text-zinc-400">Monthly quota used up.</span>
+          {!isPaidPlan ? (
+            <button
+              type="button"
+              onClick={() => router.push("/pricing")}
+              className="font-medium text-cyan-300 transition hover:text-cyan-200"
+            >
+              Upgrade Plan
+            </button>
+          ) : (
+            <span className="text-zinc-500">Resets next month</span>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
 
   return (
     <WorkspaceShell tab="chat" pageTitle="Chat" user={initialUser}>
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-        <div data-workspace-scroll className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5 md:px-6 md:py-6" ref={containerRef}>
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              data-message-kind={message.kind ?? "plain"}
-              className={cn(
-                "animate-in fade-in slide-in-from-bottom-1 duration-300 flex",
-                message.role === "bot" ? "justify-start" : "justify-end",
-              )}
-            >
-              <div
-                className={cn(
-                  "max-w-[96%] rounded-2xl px-3.5 py-3 text-sm",
-                  message.role === "bot" ? "bg-zinc-900/80 text-zinc-100" : "bg-sky-500/20 text-sky-100",
-                )}
-              >
-                {message.role === "bot" ? <AnimatedBotText text={message.text} /> : <p className="leading-relaxed">{message.text}</p>}
-
-                {message.kind === "suggestions" ? (
-                  <div className="mt-3">
-                    <div className="scrollbar-hide flex gap-3 overflow-x-auto pb-2 pr-1">
-                      {templateOptions.map((template) => {
-                        const selected = selectedTemplate?.id === template.id
-                        return (
-                          <TemplateSuggestionCard
-                            key={template.id}
-                            template={template}
-                            selected={selected}
-                            onPreview={() => {
-                              applyTemplateSelection(template, false)
-                              setPreviewViewport("desktop")
-                              setIsPreviewOpen(true)
-                            }}
-                            onSelect={() => applyTemplateSelection(template, true)}
-                          />
-                        )
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-
-                {message.kind === "templateReview" && selectedTemplate && templateData ? (
-                  <div className="mt-3">
-                    <SelectedTemplateReviewCard
-                      template={selectedTemplate}
-                      data={templateData}
-                      onEdit={() => {
-                        setEditorViewport("desktop")
-                        setIsEditorOpen(true)
-                      }}
-                      onChange={() => {
-                        setSelectedTemplate(null)
-                        setTemplateData(null)
-                        setThemeState(null)
-                        setEmailEntries([])
-                        setComposerMode("prompt")
-                        const hasSuggestions = messages.some((entry) => entry.kind === "suggestions")
-                        if (!hasSuggestions) {
-                          setMessages((prev) => [
-                            ...prev,
-                            {
-                              id: Date.now(),
-                              role: "bot",
-                              text: "No problem. Pick another template below.",
-                              kind: "suggestions",
-                            },
-                          ])
-                          return
-                        }
-                        window.setTimeout(() => {
-                          scrollToExistingSuggestions()
-                        }, 60)
-                      }}
-                      onContinue={requestEmails}
-                    />
-                  </div>
-                ) : null}
-
-                {message.kind === "emailRequest" ? (
-                  <p className="mt-3 text-xs text-zinc-400">Use + to upload CSV, or paste emails directly in chat input and press Enter.</p>
-                ) : null}
-
-                {message.kind === "validation" ? (
-                  <EmailValidationPanel
-                    entries={emailEntries}
-                    onEditEntry={updateEmailEntry}
-                    onRemoveEntry={removeEmailEntry}
-                    onConfirmSend={confirmSendCampaign}
-                  />
-                ) : null}
-              </div>
-            </div>
-          ))}
-
-          {isCsvProcessing ? <CsvSheetSkeleton /> : null}
-          {isAiResponding ? <ActivityBubble label="AI is thinking" /> : null}
-        </div>
-
-        <div className="p-3 pt-0 md:p-4 md:pt-0">
-          <div className="rounded-[28px] border border-zinc-800/80 bg-transparent px-3 py-2">
-            <input
-              ref={csvFileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(event) => processCsvFile(event.target.files?.[0] ?? null)}
-            />
-            <div className="flex items-end gap-2">
-              <button
-                type="button"
-                disabled={composerMode !== "emails" || isCsvProcessing}
-                onClick={() => csvFileInputRef.current?.click()}
-                className={cn(
-                  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none transition",
-                  composerMode === "emails" && !isCsvProcessing
-                    ? "bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
-                    : "cursor-not-allowed bg-zinc-900/50 text-zinc-600",
-                )}
-                aria-label="Upload CSV recipients"
-              >
-                +
-              </button>
-              <textarea
-                ref={textareaRef}
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault()
-                    sendPrompt()
-                  }
-                }}
-                placeholder={composerMode === "emails" ? chatCopy.emailInputPlaceholder : chatCopy.promptPlaceholder}
-                rows={1}
-                className="scrollbar-hide w-full resize-none bg-transparent py-2 text-sm leading-[1.45] text-zinc-100 placeholder:text-zinc-500 focus:outline-none md:text-base"
-              />
-            </div>
-            <p className="px-1 pb-1 text-[11px] text-zinc-500">
-              {composerMode === "emails" ? "Enter to validate recipients • Shift+Enter for new line" : "Enter to send • Shift+Enter for new line"}
-            </p>
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden" data-workflow-state={workflowState}>
+        {showHero ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
+            <h1 className="text-center text-3xl font-medium text-zinc-100 md:text-5xl">{chatHeroTitle}</h1>
+            <p className="mt-4 max-w-2xl text-center text-sm text-zinc-400 md:text-base">{chatHeroSubtitle}</p>
+            <div className="mt-8 w-full max-w-4xl">{composer}</div>
           </div>
-        </div>
+        ) : (
+          <>
+            <div data-workspace-scroll className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5 md:px-6 md:py-6" ref={containerRef}>
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  data-message-kind={message.kind ?? "plain"}
+                  className={cn(
+                    "animate-in fade-in slide-in-from-bottom-1 duration-300 flex",
+                    message.role === "bot" ? "justify-start" : "justify-end",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "max-w-[96%] rounded-2xl px-3.5 py-3 text-sm",
+                      message.role === "bot" ? "bg-zinc-900/80 text-zinc-100" : "bg-sky-500/20 text-sky-100",
+                    )}
+                  >
+                    {message.role === "bot" ? <AnimatedBotText text={message.text} /> : <p className="leading-relaxed">{message.text}</p>}
+
+                    {message.kind === "suggestions" ? (
+                      <div className="mt-3">
+                        <div className="scrollbar-hide flex gap-3 overflow-x-auto pb-2 pr-1">
+                          {(message.templateSuggestionIds?.length
+                            ? message.templateSuggestionIds
+                                .map((id) => templateOptions.find((template) => template.id === id))
+                                .filter((template): template is TemplateOption => Boolean(template))
+                            : templateOptions
+                          )
+                            .filter((template) => isPaidPlan || template.accessTier !== "pro")
+                            .map((template) => {
+                            const selected = selectedTemplate?.id === template.id
+                            return (
+                              <TemplateSuggestionCard
+                                key={template.id}
+                                template={template}
+                                selected={selected}
+                                onPreview={() => {
+                                  applyTemplateSelection(template, false)
+                                  setPreviewViewport("desktop")
+                                  setIsPreviewOpen(true)
+                                }}
+                                onSelect={() => applyTemplateSelection(template, true)}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {message.kind === "templateReview" && selectedTemplate && templateData ? (
+                      <div className="mt-3">
+                        <SelectedTemplateReviewCard
+                          template={selectedTemplate}
+                          data={templateData}
+                          onEdit={() => {
+                            setEditorViewport("desktop")
+                            setIsEditorOpen(true)
+                          }}
+                          onChange={() => {
+                            setSelectedTemplate(null)
+                            setTemplateData(null)
+                            setThemeState(null)
+                            setEmailEntries([])
+                            setComposerMode("prompt")
+                            const hasSuggestions = messages.some((entry) => entry.kind === "suggestions")
+                            if (!hasSuggestions) {
+                              setMessages((prev) => [
+                                ...prev,
+                                {
+                                  id: Date.now(),
+                                  role: "bot",
+                                  text: "No problem. Pick another template below.",
+                                  kind: "suggestions",
+                                },
+                              ])
+                              return
+                            }
+                            window.setTimeout(() => {
+                              scrollToExistingSuggestions()
+                            }, 60)
+                          }}
+                          onContinue={requestEmails}
+                        />
+                      </div>
+                    ) : null}
+
+                    {message.kind === "emailRequest" ? (
+                      <p className="mt-3 text-xs text-zinc-400">Use + to upload CSV, or paste emails directly in chat input and press Enter.</p>
+                    ) : null}
+
+                    {message.kind === "validation" ? (
+                      <EmailValidationPanel
+                        entries={emailEntries}
+                        onEditEntry={updateEmailEntry}
+                        onRemoveEntry={removeEmailEntry}
+                        onConfirmSend={confirmSendCampaign}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+
+              {isCsvProcessing ? <CsvSheetSkeleton /> : null}
+              {isAiResponding ? <AssistantSignal /> : null}
+            </div>
+
+            <div className="p-3 pt-0 md:p-4 md:pt-0">{composer}</div>
+          </>
+        )}
       </div>
 
       {isPreviewOpen && selectedTemplate && templateData && themeState ? (

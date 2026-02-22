@@ -32,6 +32,7 @@ This project includes a full Docker development environment with:
 - `nats` (JetStream enabled) for messaging/event streams and real-time pipeline events
 - `mailpit` for local SMTP testing (OTP + transactional email inbox UI)
 - API-only AI provider routing (OpenAI, Anthropic/Claude, DeepSeek, Grok/xAI, Llama API)
+- Optional local Llama runtime via `ollama` profile (no external API credentials)
 
 Recommended dev workflow:
 
@@ -60,6 +61,28 @@ make up-lite
 
 ```bash
 make dev
+```
+
+### Optional local Llama (Ollama)
+
+```bash
+make ollama-up
+make ollama-pull
+```
+
+To route app requests to local Ollama, set in `.env.local`:
+
+```bash
+LLAMA_BASE_URL="http://localhost:11434/v1"
+LLAMA_ALLOW_NO_KEY="true"
+LLAMA_MODEL="llama3.2:3b-instruct-q4_K_M"
+AI_PROVIDER_PRIORITY="llama,openrouter,deepseek,openai,anthropic,grok"
+```
+
+Stop Ollama:
+
+```bash
+make ollama-down
 ```
 
 ### Bootstrap everything (infra + app + DB init + seed data)
@@ -172,11 +195,14 @@ Required GitHub repository secrets for deployment:
 - `AI_FREE_DAILY_DEEPSEEK`
 - `AI_FREE_DAILY_GROK`
 - `AI_FREE_DAILY_LLAMA`
+- `AI_FREE_DAILY_OPENROUTER`
 - `AI_FREE_WEIGHT_OPENAI`
 - `AI_FREE_WEIGHT_ANTHROPIC`
 - `AI_FREE_WEIGHT_DEEPSEEK`
 - `AI_FREE_WEIGHT_GROK`
 - `AI_FREE_WEIGHT_LLAMA`
+- `AI_FREE_WEIGHT_OPENROUTER`
+- `AI_LOCAL_FALLBACK_ENABLED`
 - `OPENAI_BASE_URL`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
@@ -192,7 +218,14 @@ Required GitHub repository secrets for deployment:
 - `GROK_MODEL`
 - `LLAMA_BASE_URL`
 - `LLAMA_API_KEY`
+- `LLAMA_ALLOW_NO_KEY`
 - `LLAMA_MODEL`
+- `OLLAMA_MODEL`
+- `OPENROUTER_BASE_URL`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL`
+- `OPENROUTER_HTTP_REFERER`
+- `OPENROUTER_X_TITLE`
 - `AUTH_CODE_TTL_SECONDS`
 - `AUTH_CODE_RESEND_COOLDOWN_SECONDS`
 - `WAITLIST_MODE` (optional; defaults to `true`)
@@ -201,8 +234,9 @@ Required GitHub repository secrets for deployment:
 
 ## AI routing strategy (API-only)
 
-- Supported providers: OpenAI, Anthropic/Claude, DeepSeek, Grok/xAI, and Llama API.
+- Supported providers: OpenAI, Anthropic/Claude, DeepSeek, Grok/xAI, Llama API, and OpenRouter.
 - `AI_PROVIDER=auto` enables dynamic routing + provider fallback.
+- `AI_LOCAL_FALLBACK_ENABLED=true` allows a built-in local fallback responder when no provider keys are configured (useful in local dev).
 - For onboarding plans (`AI_FREE_ONBOARDING_PLANS`), free usage is controlled by:
   - provider daily caps (`AI_FREE_DAILY_*`)
   - per-user daily cap (`AI_FREE_DAILY_PER_USER`)

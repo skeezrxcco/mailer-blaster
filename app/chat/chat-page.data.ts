@@ -5,25 +5,22 @@ export type ChatMessageSeed = {
   kind?: "suggestions" | "templateReview" | "emailRequest" | "validation"
 }
 
-export const initialChatMessages: ChatMessageSeed[] = [
-  {
-    id: 1,
-    role: "bot",
-    text: "Tell me your campaign goal and I will generate four professional templates.",
-  },
-]
+export const initialChatMessages: ChatMessageSeed[] = []
+
+export const chatHeroTitle = "What are you sending today?"
+export const chatHeroSubtitle = "Describe your campaign goal and audience — I'll guide you from template to send."
 
 export const chatCopy = {
-  suggestionsIntro: "Here are four themed templates. Scroll horizontally and pick one to continue.",
-  emailRequestIntro: "Great. Paste emails in chat or click + to upload a CSV with an email header.",
-  promptPlaceholder: "Describe your newsletter campaign...",
-  emailInputPlaceholder: "Paste contacts emails or CSV rows here...",
+  suggestionsIntro: "Here are some templates that match your campaign. Pick one to preview and customize, or tell me more about what you're looking for.",
+  emailRequestIntro: "Now let's build your recipient list. Paste emails directly in the chat, or click + to upload a CSV file with an email column. I'll validate everything automatically.",
+  promptPlaceholder: "Tell me about your email campaign...",
+  emailInputPlaceholder: "Paste email addresses or CSV rows here...",
 }
 
 export function selectedTemplateNotice(templateName: string) {
-  return `${templateName} selected. Review it and continue to the audience step.`
+  return `${templateName} selected! You can preview it, edit the content, or continue to add your recipients.`
 }
 
 export function confirmedTemplateNotice(templateName: string) {
-  return `${templateName} is ready. Continue when you want to validate recipients.`
+  return `${templateName} is locked in and ready to go. When you're ready, we'll move on to collecting your mailing list.`
 }

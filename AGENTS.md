@@ -1,4 +1,4 @@
-# Blastermailer Codex Rules
+# Blastermailer Engineering Rules
 
 This file defines mandatory rules for AI agents working in this repository.
 
@@ -68,22 +68,17 @@ This file defines mandatory rules for AI agents working in this repository.
 - Production image naming must use:
   - `skeezrxcco/blastermailer:<tag>`
 
-## 6) Codex GitHub Shortcut Workflow
+## 6) GitHub Shortcut Workflow
 
 Shortcuts file:
 
 - `scripts/blastermailer-gh-shortcuts.zsh`
 
-Common commands:
+Standard commands:
 
-- Create PR to `dev`:
-  - `bm_pr_dev`
-- Create PR to `main` (hotfix):
-  - `bm_pr_hotfix` or `bm_pr_master`
-- Merge a PR into `dev` and cherry-pick to release:
-  - `bm_merge_dev_and_cherrypick <pr> <release_branch>`
-- Promote release to `main` and sync back to `dev`:
-  - `bm_promote_release <release_branch>`
+- `ghpr` for branch + PR creation.
+- `ghm` for interactive merge source/target selection.
+- `ghcp` for interactive cherry-pick selection into current branch.
 
 ## 7) Quality Gates
 

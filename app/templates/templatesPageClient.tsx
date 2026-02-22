@@ -15,7 +15,6 @@ import {
   type TemplateOption,
 } from "@/components/shared/newsletter/template-data"
 import { WorkspaceShell } from "@/components/shared/workspace/app-shell"
-import { useCheckoutItem } from "@/hooks/use-checkout-item"
 import { useMyTemplates } from "@/hooks/use-my-templates"
 import { type SessionUserSummary } from "@/types/session-user"
 import { cn } from "@/lib/utils"
@@ -482,20 +481,25 @@ function TemplatePreviewModal({
   theme,
   dishOrder,
   viewport,
+  isProUser,
   onViewportChange,
   onClose,
   onPrimaryAction,
+  onUpgradeAction,
 }: {
   template: TemplateOption
   data: TemplateEditorData
   theme: EditorThemeState
   dishOrder: DishKey[]
   viewport: PreviewMode
+  isProUser: boolean
   onViewportChange: (mode: PreviewMode) => void
   onClose: () => void
   onPrimaryAction: () => void
+  onUpgradeAction: () => void
 }) {
-  const ctaLabel = template.priceUsd ? `Buy template - $${template.priceUsd}` : "Select template"
+  const needsProUpgrade = template.accessTier === "pro" && !isProUser
+  const ctaLabel = needsProUpgrade ? "Upgrade to Pro" : "Select template"
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm" onClick={onClose}>
@@ -534,10 +538,10 @@ function TemplatePreviewModal({
         <div className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex justify-center px-4">
           <Button
             type="button"
-            onClick={onPrimaryAction}
+            onClick={needsProUpgrade ? onUpgradeAction : onPrimaryAction}
             className={cn(
               "pointer-events-auto h-11 min-w-[220px] rounded-full px-6",
-              template.priceUsd ? "bg-emerald-400 text-zinc-950 hover:bg-emerald-300" : "bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
+              needsProUpgrade ? "bg-violet-400 text-zinc-950 hover:bg-violet-300" : "bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
             )}
           >
             {ctaLabel}
@@ -825,13 +829,8 @@ function TemplateLibraryCard({
   onPreview: () => void
 }) {
   const [cardHovered, setCardHovered] = useState(false)
-  const priceLabel = template.priceUsd ? `$${template.priceUsd}` : "Free"
-  const badgeClassName =
-    template.libraryLabel === "DISCOUNT"
-      ? "bg-emerald-400/20 text-emerald-200"
-      : template.libraryLabel === "REDUCED"
-        ? "bg-amber-400/20 text-amber-200"
-        : "bg-sky-400/20 text-sky-100"
+  const accessLabel = template.accessTier === "pro" ? "Pro" : "Free"
+  const badgeClassName = template.accessTier === "pro" ? "bg-violet-400/25 text-violet-100" : "bg-emerald-400/25 text-emerald-100"
 
   return (
     <Card
@@ -849,11 +848,9 @@ function TemplateLibraryCard({
       tabIndex={0}
     >
       <CardContent className="relative flex h-full flex-col gap-3 rounded-[24px] bg-zinc-950/40 p-4">
-        {template.libraryLabel ? (
-          <span className={`absolute right-4 top-4 inline-flex rounded-full px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${badgeClassName}`}>
-            {template.libraryLabel}
-          </span>
-        ) : null}
+        <span className={`absolute right-4 top-4 z-10 inline-flex rounded-full px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${badgeClassName}`}>
+          {accessLabel}
+        </span>
 
         <TemplatePreview
           template={template}
@@ -864,10 +861,7 @@ function TemplateLibraryCard({
         />
 
         <div className="mt-auto space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <p className="line-clamp-2 text-sm font-semibold text-zinc-100">{template.name}</p>
-            <Badge className="rounded-full bg-zinc-900/70 text-zinc-200">{priceLabel}</Badge>
-          </div>
+          <p className="line-clamp-2 text-sm font-semibold text-zinc-100">{template.name}</p>
           <span className="inline-flex rounded-full bg-zinc-900/65 px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-300">{template.domain}</span>
         </div>
       </CardContent>
@@ -877,8 +871,8 @@ function TemplateLibraryCard({
 
 export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserSummary }) {
   const router = useRouter()
-  const { setCheckoutItem } = useCheckoutItem()
   const { myTemplateIds, addTemplateId } = useMyTemplates()
+  const isProUser = initialUser.plan === "pro" || initialUser.plan === "enterprise"
 
   const [activeTemplate, setActiveTemplate] = useState<TemplateOption | null>(null)
   const [templateData, setTemplateData] = useState<TemplateEditorData | null>(null)
@@ -890,7 +884,7 @@ export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserS
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [searchValue, setSearchValue] = useState("")
   const [domainFilter, setDomainFilter] = useState("all")
-  const [priceFilter, setPriceFilter] = useState("all")
+  const [accessFilter, setAccessFilter] = useState("all")
   const [sortBy, setSortBy] = useState("featured")
   const [libraryTab, setLibraryTab] = useState<"marketplace" | "myTemplates">("marketplace")
 
@@ -912,25 +906,22 @@ export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserS
         template.description.toLowerCase().includes(normalizedSearch)
 
       const matchesDomain = domainFilter === "all" || template.domain === domainFilter
-      const matchesPrice =
-        priceFilter === "all" ||
-        (priceFilter === "free" && !template.priceUsd) ||
-        (priceFilter === "paid" && Boolean(template.priceUsd))
+      const matchesAccess =
+        accessFilter === "all" ||
+        (accessFilter === "free" && template.accessTier === "free") ||
+        (accessFilter === "pro" && template.accessTier === "pro")
 
-      return matchesSearch && matchesDomain && matchesPrice
+      return matchesSearch && matchesDomain && matchesAccess
     })
 
     if (sortBy === "name") {
       return [...filtered].sort((a, b) => a.name.localeCompare(b.name))
     }
-    if (sortBy === "price-low") {
-      return [...filtered].sort((a, b) => (a.priceUsd ?? 0) - (b.priceUsd ?? 0))
-    }
-    if (sortBy === "price-high") {
-      return [...filtered].sort((a, b) => (b.priceUsd ?? 0) - (a.priceUsd ?? 0))
+    if (sortBy === "access") {
+      return [...filtered].sort((a, b) => (a.accessTier === b.accessTier ? 0 : a.accessTier === "free" ? -1 : 1))
     }
     return filtered
-  }, [domainFilter, priceFilter, searchValue, sortBy])
+  }, [accessFilter, domainFilter, searchValue, sortBy])
   const visibleTemplates = useMemo(() => {
     if (libraryTab === "marketplace") return filteredTemplates
     return filteredTemplates.filter((template) => myTemplateIdSet.has(template.id))
@@ -950,28 +941,14 @@ export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserS
   }
 
   const selectTemplate = (template: TemplateOption) => {
+    if (template.accessTier === "pro" && !isProUser) {
+      setIsPreviewOpen(false)
+      router.push("/pricing")
+      return
+    }
     addTemplateId(template.id)
     setIsPreviewOpen(false)
     router.push(`/chat?template=${template.id}`)
-  }
-
-  const buyTemplate = (template: TemplateOption) => {
-    if (!template.priceUsd) {
-      selectTemplate(template)
-      return
-    }
-
-    addTemplateId(template.id)
-    setCheckoutItem({
-      id: `tpl-${template.id}`,
-      kind: "template",
-      name: template.name,
-      description: "Template license purchase",
-      price: template.priceUsd,
-      billing: "one-time",
-    })
-    setIsPreviewOpen(false)
-    router.push("/checkout")
   }
 
   return (
@@ -1032,11 +1009,8 @@ export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserS
                 <option value="name" className="bg-zinc-950 text-zinc-100">
                   Name A-Z
                 </option>
-                <option value="price-low" className="bg-zinc-950 text-zinc-100">
-                  Price low-high
-                </option>
-                <option value="price-high" className="bg-zinc-950 text-zinc-100">
-                  Price high-low
+                <option value="access" className="bg-zinc-950 text-zinc-100">
+                  Free first
                 </option>
               </select>
             </label>
@@ -1057,16 +1031,16 @@ export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserS
               </label>
 
               <label className="inline-flex w-fit items-center gap-2 rounded-xl bg-zinc-900/70 px-3 py-2">
-                <span className="text-xs text-zinc-400">Price</span>
-                <select value={priceFilter} onChange={(event) => setPriceFilter(event.target.value)} className="h-8 w-[96px] bg-transparent text-sm text-zinc-100 outline-none">
+                <span className="text-xs text-zinc-400">Access</span>
+                <select value={accessFilter} onChange={(event) => setAccessFilter(event.target.value)} className="h-8 w-[96px] bg-transparent text-sm text-zinc-100 outline-none">
                   <option value="all" className="bg-zinc-950 text-zinc-100">
                     All
                   </option>
                   <option value="free" className="bg-zinc-950 text-zinc-100">
                     Free
                   </option>
-                  <option value="paid" className="bg-zinc-950 text-zinc-100">
-                    Paid
+                  <option value="pro" className="bg-zinc-950 text-zinc-100">
+                    Pro
                   </option>
                 </select>
               </label>
@@ -1085,7 +1059,7 @@ export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserS
         </div>
         {!visibleTemplates.length && libraryTab === "marketplace" ? <p className="mt-6 text-sm text-zinc-400">No templates match your current filters.</p> : null}
         {!visibleTemplates.length && libraryTab === "myTemplates" ? (
-          <p className="mt-6 text-sm text-zinc-400">No templates in your library yet. Select or buy one from marketplace.</p>
+          <p className="mt-6 text-sm text-zinc-400">No templates in your library yet. Select one from marketplace.</p>
         ) : null}
       </div>
 
@@ -1096,15 +1070,16 @@ export function TemplatesPageClient({ initialUser }: { initialUser: SessionUserS
           theme={themeState}
           dishOrder={dishOrder}
           viewport={previewViewport}
+          isProUser={isProUser}
           onViewportChange={setPreviewViewport}
           onClose={() => setIsPreviewOpen(false)}
           onPrimaryAction={() => {
             if (!activeTemplate) return
-            if (activeTemplate.priceUsd) {
-              buyTemplate(activeTemplate)
-              return
-            }
             selectTemplate(activeTemplate)
+          }}
+          onUpgradeAction={() => {
+            setIsPreviewOpen(false)
+            router.push("/pricing")
           }}
         />
       ) : null}

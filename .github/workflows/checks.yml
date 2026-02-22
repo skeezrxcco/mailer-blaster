@@ -44,6 +44,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Guard versioning terminology
+        run: ./scripts/check-no-versioning-terms.sh
+
       - name: Generate Prisma client
         run: npm run db:generate
 

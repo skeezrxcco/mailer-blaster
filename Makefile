@@ -1,7 +1,8 @@
 COMPOSE := docker compose
 STRIPE_PROFILE := --profile stripe
+OLLAMA_PROFILE := --profile ollama
 
-.PHONY: help init ensure-port-3000 app-off up up-lite up-all bootstrap wait-db db-init db-seed down restart ps logs logs-services stripe-up stripe-down stripe-logs dev clean
+.PHONY: help init ensure-port-3000 app-off up up-lite up-ai up-all bootstrap wait-db db-init db-seed down restart ps logs logs-services stripe-up stripe-down stripe-logs ollama-up ollama-down ollama-logs ollama-pull dev clean
 
 help:
 	@echo "Available targets:"
@@ -9,6 +10,7 @@ help:
 	@echo "  make ensure-port-3000 # Fail fast if localhost:3000 is already in use"
 	@echo "  make up            # Start infra services (db, redis, nats, mailpit)"
 	@echo "  make up-lite       # Alias of make up"
+	@echo "  make up-ai         # Start infra plus optional local Ollama service"
 	@echo "  make up-all        # Start infra, run DB init + seed, then run app locally on :3000"
 	@echo "  make bootstrap     # Alias of make up-all"
 	@echo "  make down          # Stop and remove all containers"
@@ -19,6 +21,10 @@ help:
 	@echo "  make stripe-up     # Start Stripe CLI webhook forwarder"
 	@echo "  make stripe-down   # Stop Stripe CLI webhook forwarder"
 	@echo "  make stripe-logs   # Follow Stripe CLI logs"
+	@echo "  make ollama-up     # Start optional local Ollama (profile: ollama)"
+	@echo "  make ollama-pull   # Pull OLLAMA_MODEL into local Ollama"
+	@echo "  make ollama-down   # Stop optional Ollama services"
+	@echo "  make ollama-logs   # Follow Ollama logs"
 	@echo "  make dev           # Alias of make up-all"
 	@echo "  make clean         # Remove containers, networks, and volumes"
 
@@ -36,6 +42,10 @@ up:
 
 up-lite:
 	$(COMPOSE) up -d db redis nats mailpit
+
+up-ai:
+	$(COMPOSE) up -d db redis nats mailpit
+	$(COMPOSE) $(OLLAMA_PROFILE) up -d ollama
 
 wait-db:
 	@echo "Waiting for PostgreSQL..."
@@ -77,6 +87,18 @@ stripe-down:
 
 stripe-logs:
 	$(COMPOSE) $(STRIPE_PROFILE) logs -f stripe
+
+ollama-up:
+	$(COMPOSE) $(OLLAMA_PROFILE) up -d ollama
+
+ollama-pull:
+	$(COMPOSE) $(OLLAMA_PROFILE) run --rm ollama-pull
+
+ollama-down:
+	$(COMPOSE) $(OLLAMA_PROFILE) stop ollama ollama-pull
+
+ollama-logs:
+	$(COMPOSE) $(OLLAMA_PROFILE) logs -f ollama
 
 dev: up-all
 

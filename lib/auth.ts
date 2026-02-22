@@ -308,9 +308,9 @@ export const authOptions: NextAuthOptions = {
 
       session.user.plan = typeof token.plan === "string" ? token.plan : session.user.plan ?? "starter"
       if (typeof token.role === "string") session.user.role = token.role
-      if (!session.user.email && typeof token.email === "string") session.user.email = token.email
-      if (!session.user.name && typeof token.name === "string") session.user.name = token.name
-      if (!session.user.image && typeof token.picture === "string") session.user.image = token.picture
+      if (typeof token.email === "string") session.user.email = token.email
+      if (typeof token.name === "string") session.user.name = token.name
+      if (typeof token.picture === "string") session.user.image = token.picture
 
       return session
     },

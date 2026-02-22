@@ -68,7 +68,36 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: blastermailer-ollama
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: blastermailer-ollama-pull
+    profiles: ["ollama"]
+    depends_on:
+      - ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until ollama list >/dev/null 2>&1; do
+          echo "waiting for ollama..."
+          sleep 2
+        done
+        ollama pull ${OLLAMA_MODEL:-llama3.2:3b-instruct-q4_K_M}
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    restart: "no"
+
 volumes:
   postgres_data:
   redis_data:
   nats_data:
+  ollama_data:

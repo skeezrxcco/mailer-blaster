@@ -1,14 +1,5 @@
-import { Suspense } from "react"
+import { redirect } from "next/navigation"
 
-import { requirePageUser } from "@/lib/require-page-user"
-import { ContactsPageClient } from "./contactsPageClient"
-
-export default async function ContactsPage() {
-  const initialUser = await requirePageUser("/contacts")
-
-  return (
-    <Suspense fallback={null}>
-      <ContactsPageClient initialUser={initialUser} />
-    </Suspense>
-  )
+export default function ContactsPage() {
+  redirect("/chat")
 }

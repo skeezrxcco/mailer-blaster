@@ -2,9 +2,9 @@
 
 import { type ComponentType, type ReactNode, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { ChevronDown, ChevronRight } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer"
 import {
@@ -18,6 +18,7 @@ import {
 import { BotIcon } from "@/components/ui/bot"
 import { CircleCheckIcon } from "@/components/ui/circle-check"
 import { CogIcon } from "@/components/ui/cog"
+import { FilePenLineIcon } from "@/components/ui/file-pen-line"
 import { FileTextIcon } from "@/components/ui/file-text"
 import { HandCoinsIcon } from "@/components/ui/hand-coins"
 import { IdCardIcon } from "@/components/ui/id-card"
@@ -38,6 +39,7 @@ import {
   type SettingsSection,
   type WorkspaceIconKey,
 } from "@/components/shared/workspace/workspace.data"
+import { useAiCredits } from "@/hooks/use-ai-credits"
 import { useCheckoutItem } from "@/hooks/use-checkout-item"
 import { useSessionUser } from "@/hooks/use-session-user"
 import { tabRoutes, type SidebarTab } from "@/hooks/use-workspace-tab"
@@ -58,6 +60,7 @@ type NavigationItem = {
 
 const iconByKey: Record<WorkspaceIconKey, AppIcon> = {
   bot: BotIcon,
+  filePenLine: FilePenLineIcon,
   fileText: FileTextIcon,
   users: UsersIcon,
   rocket: RocketIcon,
@@ -66,6 +69,23 @@ const iconByKey: Record<WorkspaceIconKey, AppIcon> = {
   partyPopper: PartyPopperIcon,
   handCoins: HandCoinsIcon,
   idCard: IdCardIcon,
+}
+
+type ChatHistoryItem = {
+  conversationId: string
+  state?: string
+  summary?: string | null
+  context?: {
+    goal?: string
+  } | null
+}
+
+function chatHistoryTitle(item: ChatHistoryItem, index: number) {
+  const goal = item.context?.goal?.trim()
+  if (goal) return goal.slice(0, 42)
+  const summary = item.summary?.replace(/\s+/g, " ").trim()
+  if (summary) return summary.slice(0, 42)
+  return `Chat ${index + 1}`
 }
 
 function HoverAnimatedIcon({
@@ -94,40 +114,77 @@ function HoverAnimatedIcon({
   return <IconComponent ref={iconRef} size={size} className={cn("inline-flex items-center justify-center", className)} />
 }
 
-function CreditsMeter({ credits, maxCredits }: { credits: number; maxCredits: number }) {
-  const percentage = Math.max(0, Math.min(100, (credits / maxCredits) * 100))
+function QuotaMeter({
+  quotaPercent,
+  isPaid,
+  onUpgrade,
+}: {
+  quotaPercent: number
+  isPaid: boolean
+  onUpgrade?: () => void
+}) {
+  const barColor =
+    quotaPercent > 40
+      ? "bg-gradient-to-r from-emerald-400 to-sky-400"
+      : quotaPercent > 15
+        ? "bg-gradient-to-r from-amber-300 to-amber-400"
+        : "bg-gradient-to-r from-rose-400 to-rose-500"
 
   return (
     <div className="rounded-2xl bg-zinc-900/70 px-3 py-2.5">
       <div className="flex items-center justify-between text-xs">
-        <div className="inline-flex items-center gap-1.5 text-zinc-300">
-          <HandCoinsIcon size={14} className="h-3.5 w-3.5 text-amber-300" />
-          AI Credits
-        </div>
-        <span className="font-medium text-amber-200">
-          {credits}/{maxCredits}
+        <span className="text-zinc-400">Monthly quota</span>
+        <span className={cn("font-medium", quotaPercent > 15 ? "text-zinc-200" : "text-rose-300")}>
+          {quotaPercent}% left
         </span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-        <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-amber-400" style={{ width: `${percentage}%` }} />
+        <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${quotaPercent}%` }} />
       </div>
+      {!isPaid ? (
+        <div className="mt-2.5 flex justify-start pl-0.5">
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="inline-flex h-6 items-center justify-center rounded-full border border-zinc-700/80 bg-zinc-900/70 px-2.5 text-[10px] font-medium text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+          >
+            Upgrade to Pro
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
 
+function accountTypeLabel(plan: string) {
+  const normalized = String(plan ?? "")
+    .trim()
+    .toLowerCase()
+  if (normalized === "premium") return "Premium"
+  if (normalized === "pro") return "Pro"
+  return "Free"
+}
+
+function isProPlan(plan: string) {
+  const normalized = String(plan ?? "")
+    .trim()
+    .toLowerCase()
+  return normalized === "pro" || normalized === "premium" || normalized === "enterprise"
+}
+
 function UserMenu({
   user,
-  credits,
-  maxCredits,
+  isPro,
   sidebarExpanded,
   onNavigateSettingsSection,
+  onUpgrade,
   onSignOut,
 }: {
   user: SessionUserSummary
-  credits: number
-  maxCredits: number
+  isPro: boolean
   sidebarExpanded: boolean
   onNavigateSettingsSection: (section: SettingsSection) => void
+  onUpgrade: () => void
   onSignOut: () => void
 }) {
   return (
@@ -138,7 +195,7 @@ function UserMenu({
           className={cn(
             "transition",
             sidebarExpanded
-              ? "flex w-full items-center gap-2 rounded-xl bg-zinc-900/70 px-2 py-2 text-left hover:bg-zinc-900"
+              ? "flex w-full items-center gap-2.5 rounded-xl bg-zinc-900/70 px-2 py-2 text-left hover:bg-zinc-900"
               : "rounded-full bg-zinc-900 p-0.5",
           )}
           aria-label="Open user menu"
@@ -150,19 +207,15 @@ function UserMenu({
           {sidebarExpanded ? (
             <span className="min-w-0">
               <span className="block truncate text-xs font-medium text-zinc-100">{user.name}</span>
-              <span className="block truncate text-[11px] text-zinc-400">Account menu</span>
+              <span className="mt-0.5 block truncate text-[11px] text-zinc-400">{accountTypeLabel(user.plan)}</span>
             </span>
           ) : null}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64 border-zinc-700 bg-zinc-950 text-zinc-100" align={sidebarExpanded ? "start" : "end"}>
-        <DropdownMenuLabel className="space-y-1">
+        <DropdownMenuLabel className="space-y-1.5 py-2">
           <p className="text-sm font-medium text-zinc-100">{user.name}</p>
-          <p className="text-xs text-zinc-400">{user.email}</p>
-          <Badge className="mt-1 rounded-full border border-amber-300/20 bg-amber-400/10 text-amber-200">
-            <HandCoinsIcon size={14} className="mr-1 h-3.5 w-3.5" />
-            {credits}/{maxCredits}
-          </Badge>
+          <p className="text-xs text-zinc-400">{accountTypeLabel(user.plan)}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-zinc-800" />
         <DropdownMenuItem className="focus:bg-zinc-800" onClick={() => onNavigateSettingsSection("profile")}>
@@ -174,6 +227,11 @@ function UserMenu({
         <DropdownMenuItem className="focus:bg-zinc-800" onClick={() => onNavigateSettingsSection("referals")}>
           Referals
         </DropdownMenuItem>
+        {!isPro ? (
+          <DropdownMenuItem className="text-cyan-300 focus:bg-zinc-800 focus:text-cyan-200" onClick={onUpgrade}>
+            Upgrade to Pro
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator className="bg-zinc-800" />
         <DropdownMenuItem className="focus:bg-zinc-800" onClick={onSignOut}>
           Logout
@@ -264,6 +322,10 @@ export function WorkspaceShell({
   const [topSettingsHovered, setTopSettingsHovered] = useState(false)
   const [topExitHovered, setTopExitHovered] = useState(false)
   const [showTopTitle, setShowTopTitle] = useState(false)
+  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([])
+  const [isChatHistoryLoading, setIsChatHistoryLoading] = useState(false)
+  const [chatHistoryCollapsed, setChatHistoryCollapsed] = useState(false)
+  const [mobileChatHistoryCollapsed, setMobileChatHistoryCollapsed] = useState(false)
 
   const sessionUser = useSessionUser(
     user ?? {
@@ -274,13 +336,13 @@ export function WorkspaceShell({
       avatarUrl: workspaceStaticData.user.avatarUrl,
     },
   )
+  const aiQuota = useAiCredits()
 
-  const credits = workspaceStaticData.credits
-  const maxCredits = workspaceStaticData.maxCredits
-  const isProUser = sessionUser.plan === "pro"
+  const isPaidUser = isProPlan(sessionUser.plan)
 
   const isSettingsSuiteRoute = tab === "settings" || tab === "pricing" || tab === "checkout"
   const activeSettingsSection = settingsSectionFromParam(searchParams.get("section"))
+  const activeConversationId = searchParams.get("conversationId")
   const activePageTitle = pageTitle ?? pageTitleMap[tab]
 
   useEffect(() => {
@@ -303,6 +365,40 @@ export function WorkspaceShell({
       scrollElement.removeEventListener("scroll", onScroll)
     }
   }, [tab, pageTitle])
+
+  useEffect(() => {
+    if (isSettingsSuiteRoute) return
+    let cancelled = false
+
+    const loadChatHistory = async () => {
+      try {
+        if (!cancelled) setIsChatHistoryLoading(true)
+        const response = await fetch("/api/ai/session", {
+          method: "GET",
+          cache: "no-store",
+        })
+        if (!response.ok) return
+
+        const payload = (await response.json()) as {
+          sessions?: ChatHistoryItem[]
+        }
+        if (!cancelled) {
+          setChatHistory(payload.sessions ?? [])
+        }
+      } catch {
+        // Ignore history refresh failures.
+      } finally {
+        if (!cancelled) setIsChatHistoryLoading(false)
+      }
+    }
+
+    void loadChatHistory()
+    const interval = window.setInterval(loadChatHistory, 45_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [isSettingsSuiteRoute, tab, activeConversationId])
 
   const navigateToTab = (nextTab: SidebarTab) => {
     router.push(tabRoutes[nextTab])
@@ -341,14 +437,20 @@ export function WorkspaceShell({
           },
         }))
     : sidebarItems
-        .filter((item) => item.id !== "campaigns" || isProUser)
         .map((item) => ({
           id: item.id,
           label: item.label,
           icon: iconByKey[item.icon],
-          indicator: item.id === "campaigns" ? "PRO" : undefined,
+          indicator: item.id === "campaigns" && !isPaidUser ? "PRO" : undefined,
           active: tab === item.id,
-          onSelect: () => navigateToTab(item.id),
+          onSelect: () => {
+            if (item.id === "chat") {
+              router.push("/chat?newChat=1")
+              setMobileMenuOpen(false)
+              return
+            }
+            navigateToTab(item.id)
+          },
         }))
 
   const drawerDescription = isSettingsSuiteRoute ? workspaceStaticData.settingsDrawerDescription : workspaceStaticData.workspaceDrawerDescription
@@ -387,16 +489,55 @@ export function WorkspaceShell({
               ))}
             </nav>
 
+            {!isSettingsSuiteRoute && sidebarExpanded ? (
+              <div className="mt-4 min-h-0">
+                <button
+                  type="button"
+                  onClick={() => setChatHistoryCollapsed((prev) => !prev)}
+                  className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-[13px] font-medium text-zinc-500 transition hover:text-zinc-300"
+                >
+                  <span>Your chats</span>
+                  {chatHistoryCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                </button>
+                {!chatHistoryCollapsed ? (
+                  <div className="scrollbar-hide mt-1 max-h-44 space-y-0.5 overflow-y-auto pr-1">
+                    {chatHistory.length ? (
+                      chatHistory.slice(0, 10).map((item, index) => {
+                        const isActive = tab === "chat" && activeConversationId === item.conversationId
+                        return (
+                          <button
+                            key={item.conversationId}
+                            type="button"
+                            onClick={() => {
+                              router.push(`/chat?conversationId=${encodeURIComponent(item.conversationId)}`)
+                            }}
+                            className={cn(
+                              "w-full rounded-md px-2.5 py-2 text-left transition",
+                              isActive ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-200",
+                            )}
+                          >
+                            <p className="truncate text-[12px] font-medium leading-5">{chatHistoryTitle(item, index)}</p>
+                          </button>
+                        )
+                      })
+                    ) : (
+                      <p className="px-2.5 py-1.5 text-xs text-zinc-600">{isChatHistoryLoading ? "Loading..." : "No chats yet"}</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className={cn("mt-auto", sidebarExpanded ? "space-y-3 pt-4" : "flex flex-col items-center gap-3 pt-3")}>
               <div className={cn("w-full overflow-hidden transition-all duration-300", sidebarExpanded ? "max-h-20 opacity-100" : "max-h-0 opacity-0")}>
-                <CreditsMeter credits={credits} maxCredits={maxCredits} />
+                <QuotaMeter quotaPercent={aiQuota.quotaPercent} isPaid={isPaidUser} onUpgrade={() => navigateToTab("pricing")} />
               </div>
               <UserMenu
                 user={sessionUser}
-                credits={credits}
-                maxCredits={maxCredits}
+                isPro={isPaidUser}
                 sidebarExpanded={sidebarExpanded}
                 onNavigateSettingsSection={navigateToSettingsSection}
+                onUpgrade={() => navigateToTab("pricing")}
                 onSignOut={handleSignOut}
               />
             </div>
@@ -417,10 +558,46 @@ export function WorkspaceShell({
                       <DrawerDescription>{drawerDescription}</DrawerDescription>
                     </DrawerHeader>
                     <div className="space-y-2 px-4 pb-4">
-                      <CreditsMeter credits={credits} maxCredits={maxCredits} />
+                      <QuotaMeter quotaPercent={aiQuota.quotaPercent} isPaid={isPaidUser} onUpgrade={() => navigateToTab("pricing")} />
                       {navigationItems.map((item) => (
                         <DrawerNavigationButton key={item.id} item={item} />
                       ))}
+                      {!isSettingsSuiteRoute ? (
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setMobileChatHistoryCollapsed((prev) => !prev)}
+                            className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-[13px] font-medium text-zinc-500 transition hover:text-zinc-300"
+                          >
+                            <span>Your chats</span>
+                            {mobileChatHistoryCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          </button>
+                          {!mobileChatHistoryCollapsed ? (
+                            <div className="scrollbar-hide mt-1 max-h-40 space-y-0.5 overflow-y-auto pr-1">
+                              {chatHistory.length ? (
+                                chatHistory.slice(0, 8).map((item, index) => (
+                                  <button
+                                    key={item.conversationId}
+                                    type="button"
+                                    onClick={() => {
+                                      router.push(`/chat?conversationId=${encodeURIComponent(item.conversationId)}`)
+                                      setMobileMenuOpen(false)
+                                    }}
+                                    className={cn(
+                                      "w-full rounded-md px-2.5 py-2 text-left transition",
+                                      tab === "chat" && activeConversationId === item.conversationId ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-200",
+                                    )}
+                                  >
+                                    <p className="truncate text-[12px] font-medium leading-5">{chatHistoryTitle(item, index)}</p>
+                                  </button>
+                                ))
+                              ) : (
+                                <p className="px-2.5 py-1.5 text-xs text-zinc-600">{isChatHistoryLoading ? "Loading..." : "No chats yet"}</p>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <Button variant="outline" className="mt-2 w-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" onClick={handleSignOut}>
                         Logout
                       </Button>

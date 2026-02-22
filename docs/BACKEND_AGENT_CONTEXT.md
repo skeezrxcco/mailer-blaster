@@ -71,16 +71,32 @@ Current storage is in-memory only (`lib/auth-store.ts`), so sessions/users are n
 
 ## 6) Chat Workflow (State Machine)
 
-Observed front-end states:
+Implemented AI workflow persistence and resume:
 
-- Prompt mode: user describes campaign goal.
-- Suggestion mode: app shows template suggestion cards.
-- Template review mode: selected template with actions (`Edit`, `Change`, `Continue`).
-- Email request mode: input accepts emails and CSV upload.
-- Validation mode: shows total/valid/invalid/duplicate recipients, allows edit/remove.
-- Confirm send: creates campaign id and redirects to `/activity` with query params.
+- `AiWorkflowSession` stores state/intent/summary/context per user and conversation.
+- `AiWorkflowCheckpoint` stores versioned transitions for resume/debug traces.
+- `AiRequestTelemetry` stores provider/model/latency/cost/failure/moderation metadata.
+- No raw AI chat transcripts are persisted in app DB.
 
-Backend should expose stateful endpoints so this flow is recoverable after refresh and across devices.
+Primary states:
+
+- `INTENT_CAPTURE`
+- `GOAL_BRIEF`
+- `TEMPLATE_DISCOVERY`
+- `TEMPLATE_SELECTED`
+- `CONTENT_REFINE`
+- `AUDIENCE_COLLECTION`
+- `VALIDATION_REVIEW`
+- `SEND_CONFIRMATION`
+- `QUEUED`
+- `COMPLETED`
+
+Primary AI endpoints:
+
+- `POST /api/ai/stream` SSE orchestration (session, tool, token, state patch, done events)
+- `POST /api/ai/generate` compatibility wrapper returning final response payload
+- `GET /api/ai/session` latest resumable workflow session
+- `GET /api/ai/telemetry` recent AI telemetry summary
 
 ## 7) Template System Behavior
 
