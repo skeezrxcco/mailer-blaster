@@ -37,7 +37,7 @@ function isProPlan(plan: string | undefined) {
   const normalized = String(plan ?? "")
     .trim()
     .toLowerCase()
-  return normalized === "pro" || normalized === "enterprise"
+  return normalized === "pro" || normalized === "premium" || normalized === "enterprise"
 }
 
 export function resolveProviderPolicy(input: Pick<GenerateAiTextInput, "userPlan">): ProviderPolicy {

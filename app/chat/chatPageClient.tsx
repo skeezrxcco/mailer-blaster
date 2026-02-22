@@ -69,10 +69,10 @@ type EditorChatMessage = {
 type ModelChoice = {
   id: string
   label: string
+  shortLabel: string
   mode: "essential" | "balanced" | "premium"
   requiresPro?: boolean
-  expenseTier?: "low" | "medium" | "high"
-  estimatedCostPerMessage?: number
+  quotaMultiplier: number
 }
 
 type ChatSessionSummary = {
@@ -98,9 +98,9 @@ const viewportSpecs: Record<PreviewMode, { label: string; width: number; height:
 }
 
 const modelChoices: ModelChoice[] = [
-  { id: "essential", label: "Mini", mode: "essential", expenseTier: "low", estimatedCostPerMessage: 0.00012 },
-  { id: "balanced", label: "Standard", mode: "balanced", requiresPro: true, expenseTier: "medium", estimatedCostPerMessage: 0.001 },
-  { id: "premium", label: "Premium", mode: "premium", requiresPro: true, expenseTier: "high", estimatedCostPerMessage: 0.005 },
+  { id: "essential", label: "Fast", shortLabel: "Fast", mode: "essential", quotaMultiplier: 1 },
+  { id: "balanced", label: "Powerful", shortLabel: "Powerful", mode: "balanced", requiresPro: true, quotaMultiplier: 3 },
+  { id: "premium", label: "Max", shortLabel: "Max", mode: "premium", requiresPro: true, quotaMultiplier: 8 },
 ]
 
 function looksLikeEmail(value: string) {
@@ -559,7 +559,7 @@ function AnimatedBotText({ text }: { text: string }) {
   }, [formattedText])
 
   return (
-    <p className="whitespace-pre-wrap break-words leading-relaxed">
+    <p className="whitespace-pre-wrap wrap-break-word leading-relaxed">
       {visible}
       {isTyping ? <span className="ml-0.5 inline-block h-4 w-[1px] animate-pulse bg-zinc-300 align-middle" /> : null}
     </p>
@@ -1355,9 +1355,9 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
   const [workflowState, setWorkflowState] = useState<string>("INTENT_CAPTURE")
   const [selectedModelChoice, setSelectedModelChoice] = useState<string>("essential")
   const [isComposerStacked, setIsComposerStacked] = useState(false)
-  const isProUserPlan = initialUser.plan === "pro" || initialUser.plan === "enterprise"
-  const aiCredits = useAiCredits()
-  const isOutOfCredits = aiCredits.remainingBudgetUsd <= 0
+  const isPaidPlan = initialUser.plan === "pro" || initialUser.plan === "premium" || initialUser.plan === "enterprise"
+  const aiQuota = useAiCredits()
+  const isOutOfCredits = aiQuota.exhausted
   const templateParam = searchParams.get("template")
   const newChatParam = searchParams.get("newChat")
   const conversationIdParam = searchParams.get("conversationId")
@@ -1558,9 +1558,9 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
     if (!value) return
     if (isAiResponding) return
     if (isOutOfCredits) {
-      const creditsMessage = isProUserPlan
-        ? "You've used your monthly AI token budget. Your budget resets at the start of next month."
-        : "You've used all your AI tokens for this period. Upgrade to Pro for a larger monthly budget."
+      const creditsMessage = isPaidPlan
+        ? "You've used your monthly quota. It resets at the start of next month."
+        : "You've used your monthly quota. Upgrade to Pro for a larger allowance."
       setMessages((prev) => {
         const lastMessage = prev[prev.length - 1]
         if (lastMessage?.role === "bot" && lastMessage.text === creditsMessage) return prev
@@ -1603,7 +1603,7 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
     setPrompt("")
 
     const chosenModel = modelChoices.find((option) => option.id === selectedModelChoice) ?? modelChoices[0]
-    const resolvedMode = !isProUserPlan && chosenModel.requiresPro ? "essential" : chosenModel.mode
+    const resolvedMode = !isPaidPlan && chosenModel.requiresPro ? "essential" : chosenModel.mode
     let activeConversationId = conversationId
 
     setIsAiResponding(true)
@@ -1931,90 +1931,53 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
     </button>
   )
 
-  const remainingBudget = aiCredits.remainingBudgetUsd
-  const monthlyBudget = aiCredits.monthlyBudgetUsd
-
-  const expenseDotColor = (tier?: "low" | "medium" | "high") => {
-    if (tier === "high") return "bg-rose-400"
-    if (tier === "medium") return "bg-amber-400"
-    return "bg-emerald-400"
-  }
-
-  const formatMicroCost = (usd?: number) => {
-    if (!usd || usd <= 0) return "free"
-    if (usd < 0.001) return `~$${(usd * 1000).toFixed(2)}/1K msgs`
-    if (usd < 0.01) return `~$${(usd * 100).toFixed(1)}¢/msg`
-    return `~$${usd.toFixed(3)}/msg`
-  }
-
-  const estimateRemainingMsgs = (costPerMsg?: number) => {
-    if (!costPerMsg || costPerMsg <= 0 || remainingBudget <= 0) return 0
-    return Math.floor(remainingBudget / costPerMsg)
-  }
-
-  const budgetPercent = monthlyBudget > 0 ? Math.max(0, Math.min(100, (remainingBudget / monthlyBudget) * 100)) : 0
-
   const renderModeSelector = () => {
     const activeChoice = modelChoices.find((c) => c.id === selectedModelChoice) ?? modelChoices[0]
 
     return (
       <div className="relative shrink-0">
         <select
-          value={isProUserPlan ? selectedModelChoice : "essential"}
+          value={isPaidPlan ? selectedModelChoice : "essential"}
           onChange={(event) => {
             const nextId = event.target.value
             const nextChoice = modelChoices.find((choice) => choice.id === nextId)
-            if (nextChoice?.requiresPro && !isProUserPlan) {
+            if (nextChoice?.requiresPro && !isPaidPlan) {
               setSelectedModelChoice("essential")
               return
             }
             setSelectedModelChoice(nextId)
           }}
           disabled={isOutOfCredits}
-          className="h-9 max-w-[46vw] appearance-none rounded-full bg-zinc-950/80 pl-3.5 pr-10 text-[11px] font-medium text-zinc-200 outline-none transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-500 sm:max-w-[220px]"
+          className="h-9 max-w-[46vw] appearance-none rounded-full bg-zinc-950/80 pl-3.5 pr-10 text-[11px] font-medium text-zinc-200 outline-none transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-500 sm:max-w-[200px]"
           aria-label="AI model"
         >
           {modelChoices.map((choice) => {
-            const locked = !isProUserPlan && choice.requiresPro
-            const msgs = estimateRemainingMsgs(choice.estimatedCostPerMessage)
+            const locked = !isPaidPlan && choice.requiresPro
             return (
-              <option
-                key={choice.id}
-                value={choice.id}
-                disabled={locked}
-                className="bg-zinc-950 text-zinc-100"
-              >
-                {choice.label}
-                {locked ? " (Pro)" : ` · ${formatMicroCost(choice.estimatedCostPerMessage)}`}
-                {!locked && msgs > 0 ? ` · ~${msgs} left` : ""}
+              <option key={choice.id} value={choice.id} disabled={locked} className="bg-zinc-950 text-zinc-100">
+                {choice.label} · {choice.quotaMultiplier}x{locked ? " (Pro)" : ""}
               </option>
             )
           })}
         </select>
-        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-full bg-zinc-800/80 px-1.5 py-1">
-          <span className={cn("h-1.5 w-1.5 rounded-full", expenseDotColor(activeChoice.expenseTier))} />
+        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-full bg-zinc-800/80 px-1.5 py-1">
+          <span className="text-[10px] font-medium text-zinc-400">{activeChoice.quotaMultiplier}x</span>
           <ChevronDown className="h-3 w-3 text-zinc-400" />
         </span>
       </div>
     )
   }
 
-  const renderFreeUpgradeCta = () => {
-    if (!isProUserPlan) {
-      return (
-        <Button
-          type="button"
-          onClick={() => router.push("/pricing")}
-          className="h-9 shrink-0 rounded-full bg-zinc-100 px-4 text-xs font-semibold text-zinc-900 hover:bg-zinc-200"
-        >
-          {isOutOfCredits ? "Upgrade" : "Unlock Pro"}
-        </Button>
-      )
-    }
+  const renderUpgradeCta = () => {
+    if (isPaidPlan) return null
     return (
-      <span className="shrink-0 rounded-full bg-zinc-950/70 px-3 py-1.5 text-[10px] text-zinc-400">
-        ${remainingBudget.toFixed(2)} / ${monthlyBudget.toFixed(2)} left
-      </span>
+      <Button
+        type="button"
+        onClick={() => router.push("/pricing")}
+        className="h-9 shrink-0 rounded-full bg-zinc-100 px-4 text-xs font-semibold text-zinc-900 hover:bg-zinc-200"
+      >
+        {isOutOfCredits ? "Upgrade" : "Unlock Pro"}
+      </Button>
     )
   }
 
@@ -2046,7 +2009,7 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
           }}
           placeholder={
             isOutOfCredits
-              ? "Monthly token budget exhausted. Resets next month."
+              ? "Monthly quota used up. Resets next month."
               : composerMode === "emails"
                 ? chatCopy.emailInputPlaceholder
                 : chatCopy.promptPlaceholder
@@ -2056,7 +2019,7 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
           className="scrollbar-hide min-h-[28px] max-h-[132px] w-full resize-none bg-transparent py-2.5 text-sm leading-6 text-zinc-100 placeholder:text-zinc-500 focus:outline-none disabled:text-zinc-500 md:text-[15px]"
         />
         {!isComposerStacked ? renderModeSelector() : null}
-        {!isComposerStacked ? renderFreeUpgradeCta() : null}
+        {!isComposerStacked ? renderUpgradeCta() : null}
       </div>
       <div
         className={cn(
@@ -2069,13 +2032,13 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
             {renderUploadButton(!canUploadCsv)}
             {renderModeSelector()}
           </div>
-          {renderFreeUpgradeCta()}
+          {renderUpgradeCta()}
         </div>
       </div>
       {isOutOfCredits ? (
         <div className="mt-2 flex items-center justify-between rounded-xl bg-zinc-950/70 px-3 py-2 text-xs">
-          <span className="text-zinc-400">Monthly token budget used up.</span>
-          {!isProUserPlan ? (
+          <span className="text-zinc-400">Monthly quota used up.</span>
+          {!isPaidPlan ? (
             <button
               type="button"
               onClick={() => router.push("/pricing")}
@@ -2129,7 +2092,7 @@ export function ChatPageClient({ initialUser }: { initialUser: SessionUserSummar
                                 .filter((template): template is TemplateOption => Boolean(template))
                             : templateOptions
                           )
-                            .filter((template) => isProUserPlan || template.accessTier !== "pro")
+                            .filter((template) => isPaidPlan || template.accessTier !== "pro")
                             .map((template) => {
                             const selected = selectedTemplate?.id === template.id
                             return (

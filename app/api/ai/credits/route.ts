@@ -15,16 +15,16 @@ export async function GET() {
     userPlan: session.user.plan,
   })
 
+  const quotaPercent =
+    snapshot.monthlyBudgetUsd > 0
+      ? Math.max(0, Math.min(100, Math.round((snapshot.remainingBudgetUsd / snapshot.monthlyBudgetUsd) * 100)))
+      : 0
+
   return NextResponse.json({
-    limited: snapshot.limited,
-    maxCredits: snapshot.maxCredits,
-    remainingCredits: snapshot.remainingCredits,
-    usedCredits: snapshot.usedCredits,
-    windowHours: snapshot.windowHours,
+    quotaPercent,
+    exhausted: quotaPercent <= 0,
+    plan: session.user.plan ?? "free",
     resetAt: snapshot.resetAt?.toISOString() ?? null,
-    congestion: snapshot.congestion,
-    monthlyBudgetUsd: snapshot.monthlyBudgetUsd,
-    remainingBudgetUsd: snapshot.remainingBudgetUsd,
   })
 }
 

@@ -1,6 +1,7 @@
 import type { CheckoutItem } from "@/hooks/use-checkout-item"
 
 export type PricingPlan = {
+  id: string
   name: string
   monthly: number
   annual: number
@@ -11,26 +12,48 @@ export type PricingPlan = {
 
 export const pricingPlans: PricingPlan[] = [
   {
-    name: "Starter",
-    monthly: 19,
-    annual: 15,
-    description: "For small teams shipping consistently.",
-    features: ["2,000 contacts", "Basic templates", "Email support", "1 workspace"],
+    id: "free",
+    name: "Free",
+    monthly: 0,
+    annual: 0,
+    description: "Get started with basic email campaigns.",
+    features: [
+      "500 contacts",
+      "Basic templates",
+      "AI assistant (Fast mode)",
+      "Community support",
+    ],
   },
   {
-    name: "Growth",
-    monthly: 79,
-    annual: 63,
-    description: "Best for growing hospitality brands.",
-    features: ["20,000 contacts", "Advanced templates", "Priority support", "3 workspaces"],
+    id: "pro",
+    name: "Pro",
+    monthly: 15,
+    annual: 12,
+    description: "Full-featured campaigns for growing teams.",
+    features: [
+      "20,000 contacts",
+      "All templates",
+      "AI assistant (all modes)",
+      "Campaigns workspace",
+      "Scheduling & automation",
+      "Priority support",
+    ],
     highlighted: true,
   },
   {
-    name: "Scale",
-    monthly: 199,
-    annual: 159,
-    description: "High-volume automation and dedicated support.",
-    features: ["100,000 contacts", "Custom branding", "Dedicated manager", "SLA + SSO"],
+    id: "premium",
+    name: "Premium",
+    monthly: 49,
+    annual: 39,
+    description: "Maximum power for high-volume senders.",
+    features: [
+      "100,000 contacts",
+      "Highest AI quota",
+      "Custom SMTP & branding",
+      "Advanced analytics",
+      "Dedicated account manager",
+      "SLA & SSO",
+    ],
   },
 ]
 

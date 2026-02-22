@@ -15,7 +15,7 @@ function isProPlan(plan: string | undefined) {
   const normalized = String(plan ?? "")
     .trim()
     .toLowerCase()
-  return normalized === "pro" || normalized === "enterprise"
+  return normalized === "pro" || normalized === "premium" || normalized === "enterprise"
 }
 
 export function normalizeAiModelMode(value: string | undefined | null): AiModelMode {

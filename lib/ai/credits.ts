@@ -143,7 +143,7 @@ export function estimateCreditCost(input: {
 export async function getAiCreditsSnapshot(input: { userId: string; userPlan?: string }): Promise<AiCreditsSnapshot> {
   const planBudget = getPlanBudget(input.userPlan ?? "free")
 
-  if (isProPlan(input.userPlan)) {
+  if (isPaidPlan(input.userPlan)) {
     const monthlyUsage = await getMonthlyUsageCredits(input.userId)
     const estimatedSpendUsd = monthlyUsage * 0.0003
     const remainingBudgetUsd = Math.max(0, planBudget.monthlyBudgetUsd - estimatedSpendUsd)
@@ -222,7 +222,7 @@ export async function consumeAiCredits(input: {
   credits: number
   cachedSnapshot?: AiCreditsSnapshot
 }) {
-  if (isProPlan(input.userPlan)) {
+  if (isPaidPlan(input.userPlan)) {
     const snapshot = input.cachedSnapshot ?? (await getAiCreditsSnapshot({ userId: input.userId, userPlan: input.userPlan }))
     if (snapshot.remainingBudgetUsd <= 0) {
       return { charged: 0, snapshot }

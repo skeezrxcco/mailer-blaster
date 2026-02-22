@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { type SessionUserSummary } from "@/types/session-user"
+import { templateOptions } from "@/components/shared/newsletter/template-data"
 import { cn } from "@/lib/utils"
 
 type CampaignSectionId = "overview" | "create" | "schedule" | "intelligence" | "performance" | "plugins" | "automation"
@@ -157,6 +158,36 @@ function CampaignEditorModal({
           </div>
 
           <div>
+            <label className="mb-1 block text-xs text-zinc-400">Template</label>
+            <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => patch({ templateId: undefined })}
+                className={cn(
+                  "shrink-0 rounded-xl px-3 py-2 text-xs font-medium transition",
+                  !draft.templateId ? "bg-sky-500/20 text-sky-200 ring-1 ring-sky-500/40" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800",
+                )}
+              >
+                No template
+              </button>
+              {templateOptions.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => patch({ templateId: t.id })}
+                  className={cn(
+                    "shrink-0 rounded-xl px-3 py-2 text-left transition",
+                    draft.templateId === t.id ? "bg-sky-500/20 ring-1 ring-sky-500/40" : "bg-zinc-900 hover:bg-zinc-800",
+                  )}
+                >
+                  <p className={cn("text-xs font-medium", draft.templateId === t.id ? "text-sky-200" : "text-zinc-200")}>{t.name}</p>
+                  <p className="text-[10px] text-zinc-500">{t.domain} · {t.tone}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs text-zinc-400">Content notes</label>
               <div className="flex gap-1">
@@ -217,11 +248,24 @@ function CampaignEditorModal({
           )}
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" onClick={onClose} className="rounded-xl bg-zinc-800 text-zinc-200 hover:bg-zinc-700">Cancel</Button>
-          <Button type="button" onClick={() => { onSave(draft); onClose() }} disabled={!draft.name.trim()} className="rounded-xl bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-500">
-            {campaign.name ? "Save changes" : "Create campaign"}
-          </Button>
+        <div className="mt-5 flex items-center justify-between">
+          <div>
+            {draft.templateId && (
+              <Button
+                type="button"
+                onClick={() => { onSave(draft); onClose(); window.location.href = `/chat?template=${draft.templateId}` }}
+                className="rounded-xl bg-violet-500/20 text-violet-200 hover:bg-violet-500/30"
+              >
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Continue in chat
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" onClick={onClose} className="rounded-xl bg-zinc-800 text-zinc-200 hover:bg-zinc-700">Cancel</Button>
+            <Button type="button" onClick={() => { onSave(draft); onClose() }} disabled={!draft.name.trim()} className="rounded-xl bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-500">
+              {campaign.name ? "Save changes" : "Create campaign"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -238,7 +282,7 @@ export function CampaignsPageClient({ initialUser }: { initialUser: SessionUserS
   const [campaigns, setCampaigns] = useState<Campaign[]>(seedCampaigns)
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
 
-  const isProUser = initialUser.plan === "pro" || initialUser.plan === "enterprise"
+  const isProUser = initialUser.plan === "pro" || initialUser.plan === "premium" || initialUser.plan === "enterprise"
   const activeSectionMeta = useMemo(() => campaignSections.find((s) => s.id === activeSection) ?? campaignSections[0], [activeSection])
 
   const scheduledCount = campaigns.filter((c) => c.status === "scheduled").length
@@ -393,6 +437,11 @@ export function CampaignsPageClient({ initialUser }: { initialUser: SessionUserS
                                 <div>
                                   <p className="text-sm text-zinc-200">{c.name}</p>
                                   <p className="text-xs text-zinc-500">{c.subject}</p>
+                                  {c.templateId && (
+                                    <p className="mt-0.5 text-[10px] text-violet-400/80">
+                                      {templateOptions.find((t) => t.id === c.templateId)?.name ?? "Custom template"}
+                                    </p>
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell><span className={cn("rounded-full px-2 py-0.5 text-xs", statusTone(c.status))}>{c.status}</span></TableCell>

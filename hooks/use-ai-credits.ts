@@ -2,32 +2,26 @@
 
 import { useEffect, useState } from "react"
 
-type AiCreditsPayload = {
-  limited: boolean
-  maxCredits: number | null
-  remainingCredits: number | null
-  usedCredits: number | null
-  windowHours: number | null
+export type AiQuota = {
+  /** 0–100, percentage of monthly quota remaining */
+  quotaPercent: number
+  /** True when quota is fully consumed */
+  exhausted: boolean
+  /** Current plan: "free" | "pro" | "premium" */
+  plan: string
+  /** ISO date when quota resets */
   resetAt: string | null
-  congestion: "low" | "moderate" | "high" | "severe"
-  monthlyBudgetUsd: number
-  remainingBudgetUsd: number
 }
 
-const defaultCredits: AiCreditsPayload = {
-  limited: true,
-  maxCredits: 25,
-  remainingCredits: 25,
-  usedCredits: 0,
-  windowHours: 6,
+const defaultQuota: AiQuota = {
+  quotaPercent: 100,
+  exhausted: false,
+  plan: "free",
   resetAt: null,
-  congestion: "low",
-  monthlyBudgetUsd: 0.25,
-  remainingBudgetUsd: 0.25,
 }
 
-export function useAiCredits() {
-  const [credits, setCredits] = useState<AiCreditsPayload>(defaultCredits)
+export function useAiCredits(): AiQuota {
+  const [quota, setQuota] = useState<AiQuota>(defaultQuota)
 
   useEffect(() => {
     let cancelled = false
@@ -39,8 +33,8 @@ export function useAiCredits() {
           cache: "no-store",
         })
         if (!response.ok) return
-        const payload = (await response.json()) as AiCreditsPayload
-        if (!cancelled) setCredits(payload)
+        const payload = (await response.json()) as AiQuota
+        if (!cancelled) setQuota(payload)
       } catch {
         // Keep fallback.
       }
@@ -55,6 +49,6 @@ export function useAiCredits() {
     }
   }, [])
 
-  return credits
+  return quota
 }
 

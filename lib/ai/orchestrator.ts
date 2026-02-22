@@ -89,6 +89,25 @@ function inferFallbackDecision(state: WorkflowMachineState, prompt: string): Pla
     }
   }
 
+  const emailIntentKeywords = [
+    "newsletter", "template", "email", "campaign", "promo", "promotion",
+    "announcement", "welcome", "onboarding", "launch", "update", "invite",
+    "reminder", "follow-up", "followup", "drip", "blast", "outreach",
+    "retention", "reactivation", "winback", "win-back", "upsell",
+    "cross-sell", "product update", "event", "webinar", "sale",
+  ]
+  const hasEmailIntent = emailIntentKeywords.some((kw) => normalized.includes(kw))
+
+  if (hasEmailIntent && (state.state === "INTENT_CAPTURE" || state.state === "GOAL_BRIEF")) {
+    return {
+      tool: "suggest_templates",
+      args: { query: prompt },
+      state: "TEMPLATE_DISCOVERY",
+      intent: "NEWSLETTER",
+      response: "I found some templates that match what you're going for. Pick the one that fits best — each is fully customizable, and I'll help you refine the content.",
+    }
+  }
+
   if (state.state === "INTENT_CAPTURE" || state.state === "GOAL_BRIEF") {
     return {
       tool: "ask_campaign_type",
@@ -104,16 +123,6 @@ function inferFallbackDecision(state: WorkflowMachineState, prompt: string): Pla
         "",
         "Share whatever you have and I'll take it from there.",
       ].join("\n"),
-    }
-  }
-
-  if (normalized.includes("newsletter") || normalized.includes("template")) {
-    return {
-      tool: "suggest_templates",
-      args: { query: prompt },
-      state: "TEMPLATE_DISCOVERY",
-      intent: "NEWSLETTER",
-      response: "I've found some templates that match your campaign. Take a look and pick the one that fits your vision best — each is fully customizable.",
     }
   }
 
@@ -239,9 +248,9 @@ function buildPlannerPrompt(state: WorkflowMachineState, prompt: string) {
     "- Never prefix with labels like 'Resumed:' or 'Response:'.",
     "",
     "## Tool Selection Guide",
-    "- INTENT_CAPTURE/GOAL_BRIEF: Use ask_campaign_type. Ask about their goal, audience, what they want to achieve.",
-    "- Once goal is clear: Use suggest_templates to show template options.",
-    "- User picks a template: Use select_template with the templateId.",
+    "- PROACTIVE TEMPLATES: As soon as the user mentions ANY email-related intent (welcome email, promo, newsletter, announcement, product update, etc.), use suggest_templates IMMEDIATELY. Do NOT ask clarifying questions first — show templates and refine from there.",
+    "- INTENT_CAPTURE/GOAL_BRIEF: If the user's intent is unclear or not email-related, use ask_campaign_type to learn more.",
+    "- Once templates are shown: User picks a template → use select_template with the templateId.",
     "- Template confirmed: Use request_recipients to ask for their mailing list.",
     "- User provides emails: Use validate_recipients to validate them.",
     "- Ready to send: Use review_campaign, then confirm_queue_campaign.",

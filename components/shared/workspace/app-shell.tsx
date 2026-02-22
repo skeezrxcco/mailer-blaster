@@ -114,41 +114,34 @@ function HoverAnimatedIcon({
   return <IconComponent ref={iconRef} size={size} className={cn("inline-flex items-center justify-center", className)} />
 }
 
-function CreditsMeter({
-  credits,
-  maxCredits,
-  limited,
+function QuotaMeter({
+  quotaPercent,
+  isPaid,
   onUpgrade,
 }: {
-  credits: number
-  maxCredits: number
-  limited: boolean
+  quotaPercent: number
+  isPaid: boolean
   onUpgrade?: () => void
 }) {
-  const percentage = Math.max(0, Math.min(100, maxCredits > 0 ? (credits / maxCredits) * 100 : 0))
+  const barColor =
+    quotaPercent > 40
+      ? "bg-gradient-to-r from-emerald-400 to-sky-400"
+      : quotaPercent > 15
+        ? "bg-gradient-to-r from-amber-300 to-amber-400"
+        : "bg-gradient-to-r from-rose-400 to-rose-500"
 
   return (
     <div className="rounded-2xl bg-zinc-900/70 px-3 py-2.5">
       <div className="flex items-center justify-between text-xs">
-        <div className="inline-flex items-center gap-1.5 text-zinc-300">
-          <HandCoinsIcon size={14} className="h-3.5 w-3.5 text-amber-300" />
-          {limited ? "Tokens" : "Pro Access"}
-        </div>
-        {limited ? (
-          <span className="font-medium text-amber-200">
-            {credits}/{maxCredits}
-          </span>
-        ) : (
-          <span className="font-medium text-emerald-200">UNLIMITED</span>
-        )}
+        <span className="text-zinc-400">Monthly quota</span>
+        <span className={cn("font-medium", quotaPercent > 15 ? "text-zinc-200" : "text-rose-300")}>
+          {quotaPercent}% left
+        </span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-        <div
-          className={cn("h-full rounded-full", limited ? "bg-gradient-to-r from-amber-300 to-amber-400" : "bg-gradient-to-r from-emerald-300 to-sky-300")}
-          style={{ width: `${limited ? percentage : 100}%` }}
-        />
+        <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${quotaPercent}%` }} />
       </div>
-      {limited ? (
+      {!isPaid ? (
         <div className="mt-2.5 flex justify-start pl-0.5">
           <button
             type="button"
@@ -167,8 +160,8 @@ function accountTypeLabel(plan: string) {
   const normalized = String(plan ?? "")
     .trim()
     .toLowerCase()
-  if (!normalized || normalized === "free" || normalized === "starter" || normalized === "trial") return "Free"
-  if (normalized === "pro" || normalized === "enterprise") return "Pro"
+  if (normalized === "premium") return "Premium"
+  if (normalized === "pro") return "Pro"
   return "Free"
 }
 
@@ -176,7 +169,7 @@ function isProPlan(plan: string) {
   const normalized = String(plan ?? "")
     .trim()
     .toLowerCase()
-  return normalized === "pro" || normalized === "enterprise"
+  return normalized === "pro" || normalized === "premium" || normalized === "enterprise"
 }
 
 function UserMenu({
@@ -343,11 +336,9 @@ export function WorkspaceShell({
       avatarUrl: workspaceStaticData.user.avatarUrl,
     },
   )
-  const aiCredits = useAiCredits()
+  const aiQuota = useAiCredits()
 
-  const credits = aiCredits.limited ? aiCredits.remainingCredits ?? 0 : workspaceStaticData.maxCredits
-  const maxCredits = aiCredits.limited ? aiCredits.maxCredits ?? 25 : workspaceStaticData.maxCredits
-  const isProUser = sessionUser.plan === "pro" || sessionUser.plan === "enterprise"
+  const isPaidUser = isProPlan(sessionUser.plan)
 
   const isSettingsSuiteRoute = tab === "settings" || tab === "pricing" || tab === "checkout"
   const activeSettingsSection = settingsSectionFromParam(searchParams.get("section"))
@@ -450,7 +441,7 @@ export function WorkspaceShell({
           id: item.id,
           label: item.label,
           icon: iconByKey[item.icon],
-          indicator: item.id === "campaigns" && !isProUser ? "PRO" : undefined,
+          indicator: item.id === "campaigns" && !isPaidUser ? "PRO" : undefined,
           active: tab === item.id,
           onSelect: () => {
             if (item.id === "chat") {
@@ -539,11 +530,11 @@ export function WorkspaceShell({
 
             <div className={cn("mt-auto", sidebarExpanded ? "space-y-3 pt-4" : "flex flex-col items-center gap-3 pt-3")}>
               <div className={cn("w-full overflow-hidden transition-all duration-300", sidebarExpanded ? "max-h-20 opacity-100" : "max-h-0 opacity-0")}>
-                <CreditsMeter credits={credits} maxCredits={maxCredits} limited={aiCredits.limited} onUpgrade={() => navigateToTab("pricing")} />
+                <QuotaMeter quotaPercent={aiQuota.quotaPercent} isPaid={isPaidUser} onUpgrade={() => navigateToTab("pricing")} />
               </div>
               <UserMenu
                 user={sessionUser}
-                isPro={isProPlan(sessionUser.plan)}
+                isPro={isPaidUser}
                 sidebarExpanded={sidebarExpanded}
                 onNavigateSettingsSection={navigateToSettingsSection}
                 onUpgrade={() => navigateToTab("pricing")}
@@ -567,7 +558,7 @@ export function WorkspaceShell({
                       <DrawerDescription>{drawerDescription}</DrawerDescription>
                     </DrawerHeader>
                     <div className="space-y-2 px-4 pb-4">
-                      <CreditsMeter credits={credits} maxCredits={maxCredits} limited={aiCredits.limited} onUpgrade={() => navigateToTab("pricing")} />
+                      <QuotaMeter quotaPercent={aiQuota.quotaPercent} isPaid={isPaidUser} onUpgrade={() => navigateToTab("pricing")} />
                       {navigationItems.map((item) => (
                         <DrawerNavigationButton key={item.id} item={item} />
                       ))}

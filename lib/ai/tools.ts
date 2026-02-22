@@ -69,7 +69,7 @@ export function executeTool(input: ToolExecutionInput): ToolResultPayload {
   const normalizedPlan = String(input.userPlan ?? "")
     .trim()
     .toLowerCase()
-  const isProUser = normalizedPlan === "pro" || normalizedPlan === "enterprise"
+  const isProUser = normalizedPlan === "pro" || normalizedPlan === "premium" || normalizedPlan === "enterprise"
 
   if (tool === "ask_campaign_type") {
     return {
